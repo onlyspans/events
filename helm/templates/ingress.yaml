@@ -2,9 +2,9 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "event-logs.fullname" . }}
+  name: {{ include "events.fullname" . }}
   labels:
-    {{- include "event-logs.labels" . | nindent 4 }}
+    {{- include "events.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -33,9 +33,9 @@ spec:
             pathType: {{ .pathType }}
             backend:
               service:
-                name: {{ include "event-logs.fullname" $ }}
+                name: {{ include "events.fullname" $ }}
                 port:
-                  number: {{ $.Values.service.port }}
+                  number: {{ $.Values.serviceConfig.port }}
           {{- end }}
     {{- end }}
 {{- end }}

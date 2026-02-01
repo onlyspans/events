@@ -1,15 +1,15 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "event-logs.fullname" . }}
+  name: {{ include "events.fullname" . }}
   labels:
-    {{- include "event-logs.labels" . | nindent 4 }}
+    {{- include "events.labels" . | nindent 4 }}
 spec:
-  type: {{ .Values.service.type }}
+  type: {{ .Values.serviceConfig.type }}
   ports:
-    - port: {{ .Values.service.port }}
+    - port: {{ .Values.serviceConfig.port }}
       targetPort: http
       protocol: TCP
       name: http
   selector:
-    {{- include "event-logs.selectorLabels" . | nindent 4 }}
+    {{- include "events.selectorLabels" . | nindent 4 }}

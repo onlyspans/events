@@ -1,7 +1,6 @@
-replicaCount: 1
-
 image:
-  repository: onlyspans-private.registry.twcstorage.ru/events
+  serviceRepository: onlyspans-private.registry.twcstorage.ru/events-service
+  workerRepository: onlyspans-private.registry.twcstorage.ru/events-worker
   migrationRepository: onlyspans-private.registry.twcstorage.ru/events-migrations
   pullPolicy: IfNotPresent
   tag: ""  # Will be set by Octopus
@@ -29,7 +28,7 @@ securityContext:
     - ALL
   readOnlyRootFilesystem: false
 
-service:
+serviceConfig:
   type: ClusterIP
   port: 8080
   targetPort: 8080
@@ -45,13 +44,25 @@ ingress:
           pathType: Prefix
   tls: []
 
-resources:
-  limits:
-    cpu: 512m
-    memory: 512Mi
-  requests:
-    cpu: 256m
-    memory: 256Mi
+service:
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: 128m
+      memory: 128Mi
+    requests:
+      cpu: 128m
+      memory: 128Mi
+
+worker:
+  replicaCount: 1
+  resources:
+    limits:
+      cpu: 128m
+      memory: 128Mi
+    requests:
+      cpu: 128m
+      memory: 128Mi
 
 livenessProbe:
   httpGet:

@@ -1,14 +1,14 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "event-logs.name" -}}
+{{- define "events.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
 */}}
-{{- define "event-logs.fullname" -}}
+{{- define "events.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -24,16 +24,16 @@ Create a default fully qualified app name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "event-logs.chart" -}}
+{{- define "events.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "event-logs.labels" -}}
-helm.sh/chart: {{ include "event-logs.chart" . }}
-{{ include "event-logs.selectorLabels" . }}
+{{- define "events.labels" -}}
+helm.sh/chart: {{ include "events.chart" . }}
+{{ include "events.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -41,19 +41,29 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
-Selector labels
+Selector labels for service
 */}}
-{{- define "event-logs.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "event-logs.name" . }}
+{{- define "events.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "events.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: service
+{{- end }}
+
+{{/*
+Selector labels for worker
+*/}}
+{{- define "events.workerSelectorLabels" -}}
+app.kubernetes.io/name: {{ include "events.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/component: worker
 {{- end }}
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "event-logs.serviceAccountName" -}}
+{{- define "events.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "event-logs.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "events.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}

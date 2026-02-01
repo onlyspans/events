@@ -1,14 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "event-logs.fullname" . }}
+  name: {{ include "events.fullname" . }}-service
   labels:
-    {{- include "event-logs.labels" . | nindent 4 }}
+    {{- include "events.labels" . | nindent 4 }}
+    app.kubernetes.io/component: service
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.service.replicaCount }}
   selector:
     matchLabels:
-      {{- include "event-logs.selectorLabels" . | nindent 6 }}
+      {{- include "events.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -16,41 +17,32 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "event-logs.selectorLabels" . | nindent 8 }}
+        {{- include "events.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "event-logs.serviceAccountName" . }}
+      serviceAccountName: {{ include "events.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       initContainers:
-      - name: flyway-migration
+      - name: migrations
         image: "{{ .Values.image.migrationRepository }}:{{ .Values.image.tag | default "latest" }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
-        env:
-        - name: FLYWAY_URL
-          value: "jdbc:postgresql://{{ index .Values.env "POSTGRES_HOST" }}:{{ index .Values.env "POSTGRES_PORT" | default "5432" }}/{{ index .Values.env "POSTGRES_DB" }}"
-        - name: FLYWAY_USER
-          value: {{ index .Values.env "POSTGRES_USER" | quote }}
-        - name: FLYWAY_PASSWORD
-          value: {{ index .Values.env "POSTGRES_PASSWORD" | quote }}
-        - name: FLYWAY_BASELINE_ON_MIGRATE
-          value: "true"
-        {{- range $key, $value := .Values.env }}
-        - name: {{ $key }}
-          value: {{ $value | quote }}
-        {{- end }}
+        args:
+          - "-path=/app/migrations"
+          - "-database=postgres://{{ index .Values.env "POSTGRES_USER" }}:{{ index .Values.env "POSTGRES_PASSWORD" }}@{{ index .Values.env "POSTGRES_HOST" }}:{{ index .Values.env "POSTGRES_PORT" | default "5432" }}/{{ index .Values.env "POSTGRES_DB" }}?sslmode=disable"
+          - "up"
       containers:
-      - name: {{ .Chart.Name }}
+      - name: service
         securityContext:
           {{- toYaml .Values.securityContext | nindent 12 }}
-        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        image: "{{ .Values.image.serviceRepository }}:{{ .Values.image.tag }}"
         imagePullPolicy: {{ .Values.image.pullPolicy }}
         ports:
         - name: http
-          containerPort: {{ .Values.service.targetPort }}
+          containerPort: {{ .Values.serviceConfig.targetPort }}
           protocol: TCP
         env:
         {{- range $key, $value := .Values.env }}
@@ -62,7 +54,7 @@ spec:
         readinessProbe:
           {{- toYaml .Values.readinessProbe | nindent 12 }}
         resources:
-          {{- toYaml .Values.resources | nindent 12 }}
+          {{- toYaml .Values.service.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

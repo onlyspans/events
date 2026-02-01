@@ -2,14 +2,14 @@
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMServiceScrape
 metadata:
-  name: {{ include "event-logs.fullname" . }}
+  name: {{ include "events.fullname" . }}
   labels:
-    {{- include "event-logs.labels" . | nindent 4 }}
+    {{- include "events.labels" . | nindent 4 }}
     role: metrics
 spec:
   selector:
     matchLabels:
-      {{- include "event-logs.selectorLabels" . | nindent 6 }}
+      {{- include "events.selectorLabels" . | nindent 6 }}
   endpoints:
   - port: http
     path: {{ .Values.vmServiceScrape.path }}
