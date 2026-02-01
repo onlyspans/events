@@ -1,0 +1,26 @@
+# This file is a TEMPLATE for Octopus Deploy Inline YAML
+# Copy this content into the "Inline YAML" field in Octopus Deploy step
+
+image:
+  tag: "#{Octopus.Release.Number}"
+
+imagePullSecrets:
+  - name: craas-onlyspans-private
+
+env:
+  POSTGRES_HOST: "#{Postgres.Host}"
+  POSTGRES_PORT: "#{Postgres.Port}"
+  POSTGRES_DB: "#{Postgres.Database}"
+  POSTGRES_USER: "#{Postgres.User}"
+  POSTGRES_PASSWORD: "#{Postgres.Password}"
+  POSTGRES_SSLMODE: "require"
+  KAFKA_HOST: "#{Kafka.Host}"
+  KAFKA_PORT: "#{Kafka.Port}"
+  KAFKA_TOPIC: "event-logs"
+  KAFKA_GROUP_ID: "event-logs-group"
+  KAFKA_USERNAME: "#{Kafka.Username}"
+  KAFKA_PASSWORD: "#{Kafka.Password}"
+  SERVER_PORT: "8080"
+  RETENTION_PERIOD_DAYS: "90"
+  MAX_EXPORT_SIZE: "10000"
+  RETENTION_CRON: "0 2 * * *"

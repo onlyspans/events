@@ -15,20 +15,18 @@ services:
       timeout: 5s
       retries: 5
 
-  # todo: replace to go-migrate
-  flyway:
-    image: flyway/flyway:10-alpine
-    command: -connectRetries=60 migrate
+  migrate:
+    image: migrate/migrate:v4.17.0
+    command:
+      - "-path=/migrations"
+      - "-database=postgres://${POSTGRES_USER:-events}:${POSTGRES_PASSWORD:-events}@postgres:5432/${POSTGRES_DB:-events}?sslmode=disable"
+      - "up"
     volumes:
-      - ./src/main/resources/db/migration:/flyway/sql
-    environment:
-      - FLYWAY_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-events}
-      - FLYWAY_USER=${POSTGRES_USER:-postgres}
-      - FLYWAY_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - FLYWAY_BASELINE_ON_MIGRATE=true
+      - ./migrations:/migrations
     depends_on:
       postgres:
         condition: service_healthy
+    restart: on-failure
 
   zookeeper:
     image: 'confluentinc/cp-zookeeper:7.5.0'
