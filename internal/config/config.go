@@ -70,8 +70,8 @@ func Load() (*Config, error) {
 		Kafka: KafkaConfig{
 			Host:              getEnv("KAFKA_HOST", "localhost"),
 			Port:              getEnv("KAFKA_PORT", "9092"),
-			Topic:             getEnv("KAFKA_TOPIC", "event-logs"),
-			GroupID:           getEnv("KAFKA_GROUP_ID", "event-logs-group"),
+			Topic:             getEnv("KAFKA_TOPIC", "events"),
+			GroupID:           getEnv("KAFKA_GROUP_ID", "events-group"),
 			Username:          getEnv("KAFKA_USERNAME", ""),
 			Password:          getEnv("KAFKA_PASSWORD", ""),
 			MaxPollRecords:    getEnvAsInt("KAFKA_MAX_POLL_RECORDS", 100),
