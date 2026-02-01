@@ -10,21 +10,6 @@ jobs:
     name: Run Tests
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_DB: events
-          POSTGRES_USER: events
-          POSTGRES_PASSWORD: events
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,23 +30,20 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run migrations
-        run: |
-          go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
-          migrate -path migrations -database "postgresql://events:events@localhost:5432/events?sslmode=disable" up
+      - name: Run unit tests
+        run: go test -v -race -coverprofile=coverage.out ./internal/service/...
 
-      - name: Run tests
-        env:
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: 5432
-          POSTGRES_USER: events
-          POSTGRES_PASSWORD: events
-          POSTGRES_DB: events
-        run: go test -v -race -coverprofile=coverage.out ./...
+      - name: Run integration tests
+        run: go test -v -race -coverprofile=coverage-integration.out ./internal/repository/...
+
+      - name: Combine coverage reports
+        run: |
+          go install github.com/wadey/gocovmerge@latest
+          gocovmerge coverage.out coverage-integration.out > coverage-combined.out
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         with:
-          files: ./coverage.out
+          files: ./coverage-combined.out
           flags: unittests
           fail_ci_if_error: false

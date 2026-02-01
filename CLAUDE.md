@@ -164,14 +164,44 @@ Kafka batch size is hardcoded to 100 in `consumer.go:158`. Increasing it improve
 
 ## Testing Strategy
 
-Tests exist in `internal/service/event_service_test.go`. Use table-driven tests with mocked repositories. Database tests require running PostgreSQL instance.
+The project uses a two-tier testing approach:
+
+### Unit Tests (`internal/service/*_test.go`)
+- Use mocked repositories for fast, isolated tests
+- Test business logic and DTO conversions
+- No external dependencies required
+
+### Integration Tests (`internal/repository/*_integration_test.go`)
+- Use **testcontainers-go** to spin up real PostgreSQL containers
+- Test database queries, indexes, and JSONB operations
+- Containers are automatically created and destroyed per test
+- Requires Docker daemon running locally
+
+**Running tests:**
+```bash
+# Unit tests only
+go test ./internal/service/...
+
+# Integration tests only (requires Docker)
+go test ./internal/repository/...
+
+# All tests
+make test
+```
+
+**Benefits of testcontainers:**
+- Tests run against the same PostgreSQL version as production (17-alpine)
+- No need for manual database setup or cleanup
+- True isolation between test runs
+- Catches SQL compatibility issues early
 
 ## CI/CD
 
 GitHub Actions workflow (`.github/workflows/test.yml`) runs on pull requests to main:
-- Sets up Go 1.25 and PostgreSQL 17
-- Runs database migrations before tests
-- Executes tests with race detector and coverage reporting
+- Sets up Go 1.25 (ubuntu-latest runners have Docker pre-installed)
+- Runs unit tests with mocked dependencies
+- Runs integration tests with testcontainers (spins up PostgreSQL automatically)
+- Combines coverage reports from both test suites
 - Uploads coverage to Codecov (optional)
 
 ## Logging

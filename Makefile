@@ -1,17 +1,19 @@
-.PHONY: help build build-service build-worker run-service run-worker test clean docker-build migrate-up migrate-down
+.PHONY: help build build-service build-worker run-service run-worker test test-unit test-integration clean docker-build migrate-up migrate-down
 
 help:
 	@echo "Available targets:"
-	@echo "  build          - Build both service and worker binaries"
-	@echo "  build-service  - Build service binary"
-	@echo "  build-worker   - Build worker binary"
-	@echo "  run-service    - Run the service locally"
-	@echo "  run-worker     - Run the worker locally"
-	@echo "  test           - Run tests"
-	@echo "  clean          - Remove build artifacts"
-	@echo "  docker-build   - Build Docker image"
-	@echo "  migrate-up     - Run database migrations up"
-	@echo "  migrate-down   - Run database migrations down"
+	@echo "  build              - Build both service and worker binaries"
+	@echo "  build-service      - Build service binary"
+	@echo "  build-worker       - Build worker binary"
+	@echo "  run-service        - Run the service locally"
+	@echo "  run-worker         - Run the worker locally"
+	@echo "  test               - Run all tests (unit + integration)"
+	@echo "  test-unit          - Run unit tests only"
+	@echo "  test-integration   - Run integration tests only (requires Docker)"
+	@echo "  clean              - Remove build artifacts"
+	@echo "  docker-build       - Build Docker image"
+	@echo "  migrate-up         - Run database migrations up"
+	@echo "  migrate-down       - Run database migrations down"
 
 build: build-service build-worker
 
@@ -32,8 +34,16 @@ run-worker:
 	go run ./cmd/worker
 
 test:
-	@echo "Running tests..."
+	@echo "Running all tests..."
 	go test -v -race ./...
+
+test-unit:
+	@echo "Running unit tests..."
+	go test -v -race ./internal/service/...
+
+test-integration:
+	@echo "Running integration tests (requires Docker)..."
+	go test -v -race ./internal/repository/...
 
 clean:
 	@echo "Cleaning..."
