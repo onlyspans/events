@@ -6,7 +6,7 @@ ARG TARGETARCH
 WORKDIR /workspace
 
 COPY go.mod go.mod
-COPY go.sum* go.sum*
+COPY go.sum go.sum
 
 RUN go mod download
 
