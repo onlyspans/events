@@ -20,12 +20,29 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 
 	ctx := context.Background()
 
-	// Start PostgreSQL container
+	// Get absolute path to migrations directory
+	migrationsPath, err := filepath.Abs(filepath.Join("..", "..", "migrations"))
+	if err != nil {
+		t.Fatalf("failed to get migrations path: %v", err)
+	}
+
+	// Discover all .up.sql migration files
+	migrations, err := filepath.Glob(filepath.Join(migrationsPath, "*.up.sql"))
+	if err != nil {
+		t.Fatalf("failed to find migration files: %v", err)
+	}
+	if len(migrations) == 0 {
+		t.Fatalf("no migration files found in %s", migrationsPath)
+	}
+
+	// Start PostgreSQL container with migration scripts
+	// WithInitScripts executes scripts in alphabetical order
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:17-alpine",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
+		postgres.WithInitScripts(migrations...),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
@@ -47,11 +64,6 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 		t.Fatalf("failed to connect to database: %v", err)
 	}
 
-	// Run migrations
-	if err := runMigrations(db); err != nil {
-		t.Fatalf("failed to run migrations: %v", err)
-	}
-
 	// Cleanup function
 	cleanup := func() {
 		db.Close()
@@ -61,80 +73,6 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	}
 
 	return db, cleanup
-}
-
-func runMigrations(db *sql.DB) error {
-	// Get migrations path relative to this test file
-	migrationsPath := filepath.Join("..", "..", "migrations")
-
-	// Read and execute migration files
-	migrations := []string{
-		filepath.Join(migrationsPath, "000001_create_events_table.up.sql"),
-		filepath.Join(migrationsPath, "000002_create_settings_table.up.sql"),
-	}
-
-	for _, migration := range migrations {
-		content, err := filepath.Abs(migration)
-		if err != nil {
-			return err
-		}
-
-		// Read file content
-		query, err := filepath.Glob(content)
-		if err != nil {
-			return err
-		}
-
-		// Execute SQL from file
-		sqlContent := `
-		CREATE TABLE IF NOT EXISTS events
-		(
-			id             UUID PRIMARY KEY         DEFAULT gen_random_uuid(),
-			timestamp      TIMESTAMP WITH TIME ZONE NOT NULL,
-			user_name      VARCHAR(255),
-			category       VARCHAR(255),
-			action         VARCHAR(255),
-			document_name  VARCHAR(255),
-			project        VARCHAR(255),
-			environment    VARCHAR(255),
-			tenant         VARCHAR(255),
-			correlation_id VARCHAR(255),
-			trace_id       VARCHAR(255),
-			details        JSONB,
-			created_at     TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-		);
-
-		CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp DESC);
-		CREATE INDEX IF NOT EXISTS idx_events_user ON events (user_name);
-		CREATE INDEX IF NOT EXISTS idx_events_category ON events (category);
-		CREATE INDEX IF NOT EXISTS idx_events_action ON events (action);
-		CREATE INDEX IF NOT EXISTS idx_events_document ON events (document_name);
-		CREATE INDEX IF NOT EXISTS idx_events_project ON events (project);
-		CREATE INDEX IF NOT EXISTS idx_events_environment ON events (environment);
-		CREATE INDEX IF NOT EXISTS idx_events_tenant ON events (tenant);
-		CREATE INDEX IF NOT EXISTS idx_events_correlation_id ON events (correlation_id);
-		CREATE INDEX IF NOT EXISTS idx_events_trace_id ON events (trace_id);
-		CREATE INDEX IF NOT EXISTS idx_events_details ON events USING GIN (details);
-
-		CREATE TABLE IF NOT EXISTS settings
-		(
-			id                    SERIAL PRIMARY KEY,
-			retention_period_days INT NOT NULL DEFAULT 90,
-			max_export_size       INT NOT NULL DEFAULT 10000
-		);
-
-		INSERT INTO settings (retention_period_days, max_export_size)
-		VALUES (90, 10000)
-		ON CONFLICT DO NOTHING;
-		`
-
-		if _, err := db.Exec(sqlContent); err != nil {
-			return err
-		}
-		_ = query // Suppress unused warning
-	}
-
-	return nil
 }
 
 func TestEventRepository_SaveBatch(t *testing.T) {

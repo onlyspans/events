@@ -174,6 +174,7 @@ The project uses a two-tier testing approach:
 ### Integration Tests (`internal/repository/*_integration_test.go`)
 - Use **testcontainers-go** to spin up real PostgreSQL containers
 - Test database queries, indexes, and JSONB operations
+- Migrations loaded via `postgres.WithInitScripts()` - uses actual migration files from `migrations/` directory
 - Containers are automatically created and destroyed per test
 - Requires Docker daemon running locally
 
@@ -194,6 +195,15 @@ make test
 - No need for manual database setup or cleanup
 - True isolation between test runs
 - Catches SQL compatibility issues early
+- Uses actual migration files (single source of truth)
+
+**How migrations work in tests:**
+- Migration files are auto-discovered using `filepath.Glob("*.up.sql")`
+- All `.up.sql` files from `migrations/` directory are automatically loaded
+- Files execute in alphabetical order (works because migrations are prefixed: 000001, 000002, etc.)
+- Adding new migrations requires zero test code changes
+- Migrations run before container is marked "ready"
+- No duplication of SQL - tests use the same files as production
 
 ## CI/CD
 
