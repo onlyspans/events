@@ -25,8 +25,6 @@ docker compose up
 curl http://localhost:8080/healthz
 ```
 
-See [QUICKSTART.md](QUICKSTART.md) for detailed setup instructions.
-
 ## Configuration
 
 The service uses environment variables for configuration. A `.env` file is provided with defaults for local development.
