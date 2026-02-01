@@ -1,8 +1,8 @@
 replicaCount: 1
 
 image:
-  repository: onlyspans-private.registry.twcstorage.ru/event-logs
-  migrationRepository: onlyspans-private.registry.twcstorage.ru/event-logs-migrations
+  repository: onlyspans-private.registry.twcstorage.ru/events
+  migrationRepository: onlyspans-private.registry.twcstorage.ru/events-migrations
   pullPolicy: IfNotPresent
   tag: ""  # Will be set by Octopus
 
@@ -13,7 +13,7 @@ fullnameOverride: ""
 serviceAccount:
   create: true
   annotations: {}
-  name: "event-logs-sa"
+  name: "events-sa"
 
 podAnnotations: {}
 
@@ -39,7 +39,7 @@ ingress:
   className: "nginx"
   annotations: {}
   hosts:
-    - host: event-logs.onlyspans.ru
+    - host: events.onlyspans.ru
       paths:
         - path: /
           pathType: Prefix
@@ -55,7 +55,7 @@ resources:
 
 livenessProbe:
   httpGet:
-    path: /actuator/health/liveness
+    path: /healthz
     port: http
   initialDelaySeconds: 60
   periodSeconds: 10
@@ -64,7 +64,7 @@ livenessProbe:
 
 readinessProbe:
   httpGet:
-    path: /actuator/health/readiness
+    path: /readyz
     port: http
   initialDelaySeconds: 30
   periodSeconds: 10
@@ -89,4 +89,4 @@ env: {}
 vmServiceScrape:
   enabled: true
   interval: 15s
-  path: /actuator/prometheus
+  path: /metrics
