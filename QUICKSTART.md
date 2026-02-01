@@ -8,6 +8,24 @@ Get the Event Logs microservice running locally in 5 minutes.
 - Docker and Docker Compose installed
 - PostgreSQL client (optional, for manual migrations)
 
+## Configuration
+
+The service is configured using environment variables. A `.env` file is provided with sensible defaults for local development:
+
+```bash
+# The .env file is already configured with defaults
+# To customize, edit .env or set environment variables
+
+# Key settings:
+# - SERVER_PORT: HTTP API port (default: 8080)
+# - POSTGRES_*: Database connection settings
+# - KAFKA_*: Kafka broker and consumer settings
+# - RETENTION_PERIOD_DAYS: How long to keep events (default: 90)
+# - MAX_EXPORT_SIZE: Maximum events per CSV export (default: 10000)
+```
+
+See `.env.example` for all available configuration options.
+
 ## Quick Start with Docker Compose
 
 The fastest way to get everything running:

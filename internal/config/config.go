@@ -6,6 +6,8 @@ import (
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 // Config holds all application configuration.
@@ -54,7 +56,15 @@ type EventLogConfig struct {
 }
 
 // Load reads configuration from environment variables with defaults.
+// It automatically loads from .env file if present.
 func Load() (*Config, error) {
+	// Load .env file if it exists (ignore error if file doesn't exist)
+	if err := godotenv.Load(); err != nil {
+		slog.Debug("no .env file found, using environment variables or defaults")
+	} else {
+		slog.Info("loaded configuration from .env file")
+	}
+
 	cfg := &Config{
 		Server: ServerConfig{
 			Port: getEnv("SERVER_PORT", "8080"),
@@ -62,16 +72,16 @@ func Load() (*Config, error) {
 		Database: DatabaseConfig{
 			Host:     getEnv("POSTGRES_HOST", "localhost"),
 			Port:     getEnv("POSTGRES_PORT", "5432"),
-			User:     getEnv("POSTGRES_USER", "postgres"),
-			Password: getEnv("POSTGRES_PASSWORD", "postgres"),
-			DBName:   getEnv("POSTGRES_DB", "eventlogs"),
+			User:     getEnv("POSTGRES_USER", "events"),
+			Password: getEnv("POSTGRES_PASSWORD", "events"),
+			DBName:   getEnv("POSTGRES_DB", "events"),
 			SSLMode:  getEnv("POSTGRES_SSLMODE", "disable"),
 		},
 		Kafka: KafkaConfig{
 			Host:              getEnv("KAFKA_HOST", "localhost"),
 			Port:              getEnv("KAFKA_PORT", "9092"),
-			Topic:             getEnv("KAFKA_TOPIC", "events"),
-			GroupID:           getEnv("KAFKA_GROUP_ID", "events-group"),
+			Topic:             getEnv("KAFKA_TOPIC", "event-logs"),
+			GroupID:           getEnv("KAFKA_GROUP_ID", "event-logs-group"),
 			Username:          getEnv("KAFKA_USERNAME", ""),
 			Password:          getEnv("KAFKA_PASSWORD", ""),
 			MaxPollRecords:    getEnvAsInt("KAFKA_MAX_POLL_RECORDS", 100),
