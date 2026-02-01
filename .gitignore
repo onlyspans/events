@@ -42,3 +42,6 @@ temp/
 
 # Build artifacts
 *.log
+
+# Compose volumes
+data
