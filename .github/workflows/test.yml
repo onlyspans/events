@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   test:
     name: Run Tests
@@ -31,19 +35,27 @@ jobs:
         run: go mod download
 
       - name: Run unit tests
-        run: go test -v -race -coverprofile=coverage.out ./internal/service/...
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./internal/service/...
 
       - name: Run integration tests
-        run: go test -v -race -coverprofile=coverage-integration.out ./internal/repository/...
+        run: go test -v -race -coverprofile=coverage-integration.out -covermode=atomic ./internal/repository/...
 
       - name: Combine coverage reports
         run: |
           go install github.com/wadey/gocovmerge@latest
-          gocovmerge coverage.out coverage-integration.out > coverage-combined.out
+          gocovmerge coverage.out coverage-integration.out > coverage.txt
 
-      - name: Upload coverage
+      - name: Coverage report
+        uses: fgrosse/go-coverage-report@v1.1.0
+        if: github.event_name == 'pull_request'
+        with:
+          coverage-artifact-name: coverage.txt
+          coverage-file-name: coverage.txt
+          root-package: github.com/onlyspans/events
+
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: ./coverage-combined.out
+          files: ./coverage.txt
           flags: unittests
           fail_ci_if_error: false

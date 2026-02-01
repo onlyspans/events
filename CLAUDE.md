@@ -212,7 +212,14 @@ GitHub Actions workflow (`.github/workflows/test.yml`) runs on pull requests to 
 - Runs unit tests with mocked dependencies
 - Runs integration tests with testcontainers (spins up PostgreSQL automatically)
 - Combines coverage reports from both test suites
+- **Posts coverage report as PR comment** showing overall coverage and changes
 - Uploads coverage to Codecov (optional)
+
+The coverage report comment shows:
+- Overall test coverage percentage
+- Coverage change compared to base branch
+- Per-package coverage breakdown
+- Links to detailed coverage reports
 
 ## Logging
 
