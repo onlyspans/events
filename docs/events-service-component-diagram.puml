@@ -1,0 +1,31 @@
+@startuml "Event Service Component Diagram"
+title Event Service Component Diagram
+
+component "Kafka" as Kafka <<System>>
+component "OpenSearch" as OpenSearch <<Storage>>
+component "Other Microservice\n(produces logs to Kafka)" as OtherMS <<Service>>
+component "Admin UI / Users" as UI <<Client>>
+
+package "Audit Service (Backend)" {
+  component "REST API\n(LogController, SettingsController)" as REST
+  component "EventService\n(business logic)" as Service
+  component "Kafka Consumer\n(KafkaEventInput / Job)" as Consumer
+  component "OpenSearch Repo\n(IEventStorage impl)" as Repo
+  component "RetentionService / Settings" as Retention
+}
+
+OtherMS --> Kafka : "produce events"
+Kafka --> Consumer : "consume topic: events"
+Consumer --> Service : "deliver events"
+Service --> Repo : "persist / search"
+REST --> Service : "query / manage"
+UI --> REST : "HTTP (query / manage)"
+Retention --> Repo : "apply retention"
+Repo --> OpenSearch : "index / query"
+Service --> OpenSearch : "search (via Repo)"
+
+component "Prometheus" as Obs <<Monitoring>>
+Service --> Obs : "metrics"
+Consumer --> Obs : "metrics"
+
+@enduml

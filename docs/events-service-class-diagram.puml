@@ -1,0 +1,158 @@
+@startuml "Event Service Class Diagram"
+
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Event Service Class Diagram
+
+Boundary(events, "Events") {
+  Boundary(eventApi, "API") {
+    class EventController {
+      +GET  /events
+      +GET  /events/{id}
+      +GET  /export
+    }
+
+    class QueryDto {
+      +service: String?
+      +user: String?
+      +action: String?
+      +status: String?
+      +correlationId: String?
+      +traceId: String?
+      +startDate: Date?
+      +endDate: Date?
+      +sortBy: String?
+      +sortOrder: String?
+      +page: int?
+      +size: int?
+    }
+
+    class QueryResult {
+      +events: List<EventDto>
+      +total: int
+      +page: int
+      +size: int
+    }
+
+    class EventDto {
+      +timestamp: Date
+      +service: String
+      +user: String
+      +action: String
+      +status: String
+      +payload: Map
+      +correlationId: String
+      +traceId: String
+    }
+
+    EventController ..> QueryDto
+    EventController ..> QueryResult
+    QueryResult ..> EventDto
+  }
+
+  Boundary(eventServices, "Services") {
+    interface IEventService {
+      +ingestEvents(List<EventDto>)
+      +searchEvents(QueryDto) : QueryResult
+      +exportCsv(QueryDto) : FileOutputStream
+    }
+
+    class EventService {
+      +ingestEvents(List<EventDto>)
+      +searchEvents(QueryDto) : QueryResult
+      +exportCsv(QueryDto) : FileOutputStream
+    }
+
+    EventService ..|> IEventService
+  }
+
+  Boundary(eventsStorage, "Storage") {
+    interface IEventStorage {
+      +add(List<EventEntity>)
+      +search(QueryDto) : List<EventEntity>
+    }
+
+    class OpenSearchEventStorage {
+      +add(List<EventEntity>)
+      +search(QueryDto) : List<EventEntity>
+    }
+
+    class EventEntity {
+      +timestamp: Date
+      +service: String
+      +user: String
+      +action: String
+      +status: String
+      +payload: Map
+      +correlationId: String
+      +traceId: String
+    }
+
+    IEventStorage ..> EventEntity
+    OpenSearchEventStorage ..|> IEventStorage
+  }
+
+  Boundary(eventInputs, "Inputs") {
+    interface IEventInput {
+      +read() : List<EventEntity>
+    }
+
+    class KafkaEventInput {
+      +read() : List<EventEntity>
+    }
+
+    KafkaEventInput ..|> IEventInput
+  }
+
+  Boundary(eventsJobs, "Jobs") {
+    class EventProcessingJob {
+      +execute()
+    }
+
+    EventProcessingJob --> IEventInput : reads from
+    EventProcessingJob --> IEventStorage : writes to
+  }
+
+  EventController --> IEventService : uses
+  EventService --> IEventStorage : uses
+}
+
+Boundary(settings, "Settings") {
+  Boundary(settingsApi, "API") {
+    class SettingsController {
+      +GET  /settings
+      +PUT  /settings
+    }
+
+    class SettingsDto {
+      +retentionPeriodDays: int
+      +maxExportSize: int
+    }
+
+    SettingsController ..> SettingsDto
+  }
+
+  Boundary(settingsServices, "Services") {
+    interface ISettingsService {
+      +getSettings() : SettingsDto
+      +updateSettings(SettingsDto) : SettingsDto
+    }
+
+    class OpenSearchSettingsService {
+      +getSettings() : SettingsDto
+      +updateSettings(SettingsDto) : SettingsDto
+    }
+
+    OpenSearchSettingsService ..|> ISettingsService
+  }
+
+  SettingsController --> ISettingsService : uses
+}
+
+Boundary(infrastructure, "Infrastructure") {
+  class ReadinessController {
+    +GET /readyz
+  }
+}
+
+@enduml

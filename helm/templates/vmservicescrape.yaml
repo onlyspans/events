@@ -1,0 +1,17 @@
+{{- if .Values.vmServiceScrape.enabled }}
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: {{ include "event-logs.fullname" . }}
+  labels:
+    {{- include "event-logs.labels" . | nindent 4 }}
+    role: metrics
+spec:
+  selector:
+    matchLabels:
+      {{- include "event-logs.selectorLabels" . | nindent 6 }}
+  endpoints:
+  - port: http
+    path: {{ .Values.vmServiceScrape.path }}
+    interval: {{ .Values.vmServiceScrape.interval }}
+{{- end }}
