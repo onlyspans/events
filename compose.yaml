@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: 'postgres:17-alpine'
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-events}
+      - POSTGRES_USER=${POSTGRES_USER:-events}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-events}
+    ports:
+      - '5432:5432'
+    volumes:
+      - ./data/postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-events}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # todo: replace to go-migrate
+  flyway:
+    image: flyway/flyway:10-alpine
+    command: -connectRetries=60 migrate
+    volumes:
+      - ./src/main/resources/db/migration:/flyway/sql
+    environment:
+      - FLYWAY_URL=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-events}
+      - FLYWAY_USER=${POSTGRES_USER:-postgres}
+      - FLYWAY_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - FLYWAY_BASELINE_ON_MIGRATE=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  zookeeper:
+    image: 'confluentinc/cp-zookeeper:7.5.0'
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - '2181:2181'
+
+  kafka:
+    image: 'confluentinc/cp-kafka:7.5.0'
+    depends_on:
+      - zookeeper
+    ports:
+      - '9092:9092'
+      - '9101:9101'
+    volumes:
+      - ./data/kafka-data:/var/lib/kafka/data
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_JMX_PORT: 9101
+      KAFKA_JMX_HOSTNAME: localhost
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5

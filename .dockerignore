@@ -1,0 +1,11 @@
+.git
+.gitignore
+bin
+node_modules
+.tmp
+.env
+**/*.md
+**/*.txt
+**/*.log
+**/*.local
+**/.DS_Store
