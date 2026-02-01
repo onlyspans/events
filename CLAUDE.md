@@ -166,6 +166,14 @@ Kafka batch size is hardcoded to 100 in `consumer.go:158`. Increasing it improve
 
 Tests exist in `internal/service/event_service_test.go`. Use table-driven tests with mocked repositories. Database tests require running PostgreSQL instance.
 
+## CI/CD
+
+GitHub Actions workflow (`.github/workflows/test.yml`) runs on pull requests to main:
+- Sets up Go 1.25 and PostgreSQL 17
+- Runs database migrations before tests
+- Executes tests with race detector and coverage reporting
+- Uploads coverage to Codecov (optional)
+
 ## Logging
 
 All components use `log/slog` with JSON output to stdout:
