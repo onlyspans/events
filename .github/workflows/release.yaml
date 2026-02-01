@@ -9,19 +9,71 @@ on:
 
 env:
   REGISTRY: onlyspans-private.registry.twcstorage.ru
-  IMAGE_NAME: event-logs
-  OCTOPUS_PROJECT: event-logs
+  IMAGE_NAME: events
+  OCTOPUS_PROJECT: events
   OCTOPUS_SPACE: Default
   OCTOPUS_SERVER_URL: http://octopus.onlyspans.ru
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run unit tests
+        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./internal/service/...
+
+      - name: Run integration tests
+        run: go test -v -race -coverprofile=coverage-integration.out -covermode=atomic ./internal/repository/...
+
+      - name: Combine coverage reports
+        run: |
+          go install github.com/wadey/gocovmerge@latest
+          gocovmerge coverage.out coverage-integration.out > coverage.txt
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.txt
+          retention-days: 5
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.txt
+          flags: unittests
+          fail_ci_if_error: false
+
   release:
+    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    name: Build and release
-    permissions:
-      contents: write
-      packages: write
+    name: Build and Release
 
     steps:
       - name: Checkout code
@@ -47,23 +99,41 @@ jobs:
           username: ${{ secrets.DOCKER_REGISTRY_USERNAME }}
           password: ${{ secrets.DOCKER_REGISTRY_TOKEN }}
 
-      - name: Build Docker image
+      - name: Build Docker images
         run: |
+          # Build service image
           docker build . --rm \
-            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
-            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+            --target service \
+            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-service:${{ steps.version.outputs.version }} \
+            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-service:latest \
             --build-arg REVISION='${{ github.sha }}' \
             --build-arg VERSION='${{ steps.version.outputs.version }}'
-          
+
+          # Build worker image
+          docker build . --rm \
+            --target worker \
+            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-worker:${{ steps.version.outputs.version }} \
+            --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-worker:latest \
+            --build-arg REVISION='${{ github.sha }}' \
+            --build-arg VERSION='${{ steps.version.outputs.version }}'
+
+          # Build migrations image
           docker build . --rm \
             --target migrations \
             --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrations:${{ steps.version.outputs.version }} \
             --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrations:latest
 
-      - name: Push Docker image
+      - name: Push Docker images
         run: |
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          # Push service images
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-service:${{ steps.version.outputs.version }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-service:latest
+
+          # Push worker images
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-worker:${{ steps.version.outputs.version }}
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-worker:latest
+
+          # Push migrations images
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrations:${{ steps.version.outputs.version }}
           docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrations:latest
 
@@ -81,6 +151,11 @@ jobs:
             --space ${{ env.OCTOPUS_SPACE }}
             --releaseNotes "Release ${{ steps.version.outputs.version }} - Commit: ${{ github.sha }}"
 
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -89,13 +164,11 @@ jobs:
           body: |
             ## Release ${{ steps.version.outputs.version }}
 
-            ### Docker Image
-            `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}`
-
             ### Commit
             ${{ github.sha }}
 
             ### Triggered by
             @${{ github.actor }}
+          files: coverage.txt
           draft: false
           prerelease: false
