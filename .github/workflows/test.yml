@@ -45,13 +45,19 @@ jobs:
           go install github.com/wadey/gocovmerge@latest
           gocovmerge coverage.out coverage-integration.out > coverage.txt
 
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.txt
+          retention-days: 5
+
       - name: Coverage report
         uses: fgrosse/go-coverage-report@v1.1.0
         if: github.event_name == 'pull_request'
         with:
-          coverage-artifact-name: coverage.txt
+          coverage-artifact-name: coverage
           coverage-file-name: coverage.txt
-          root-package: github.com/onlyspans/events
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
