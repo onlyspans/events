@@ -18,17 +18,17 @@ import (
 
 var (
 	eventsReceivedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "event_logs_received",
+		Name: "event_logs_received_total",
 		Help: "Total number of events received from Kafka",
 	})
 
 	batchesProcessedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "event_logs_batches_processed",
+		Name: "event_logs_batches_processed_total",
 		Help: "Total number of batches processed",
 	})
 
 	eventsFailedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "event_logs_failed",
+		Name: "event_logs_failed_total",
 		Help: "Total number of events that failed to process",
 	})
 )

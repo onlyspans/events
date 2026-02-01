@@ -18,17 +18,17 @@ import (
 
 var (
 	eventsIngestedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "event_logs_ingested",
+		Name: "event_logs_ingested_total",
 		Help: "Total number of events ingested",
 	})
 
 	eventsSearchedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "event_logs_searched",
+		Name: "event_logs_searched_total",
 		Help: "Total number of search operations",
 	})
 
 	eventsExportedCounter = promauto.NewCounter(prometheus.CounterOpts{
-		Name: "event_logs_exported",
+		Name: "event_logs_exported_total",
 		Help: "Total number of events exported",
 	})
 )

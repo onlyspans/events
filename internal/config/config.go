@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"time"
@@ -131,6 +132,11 @@ func getEnvAsInt(key string, defaultValue int) int {
 	}
 	value, err := strconv.Atoi(valueStr)
 	if err != nil {
+		slog.Warn("failed to parse environment variable as integer, using default",
+			"key", key,
+			"value", valueStr,
+			"default", defaultValue,
+			"error", err)
 		return defaultValue
 	}
 	return value

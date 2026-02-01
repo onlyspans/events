@@ -165,11 +165,31 @@ func (r *EventRepository) Search(ctx context.Context, query SearchQuery) ([]*dom
 		return nil, 0, fmt.Errorf("failed to count events: %w", err)
 	}
 
-	// Build ORDER BY clause
+	// Build ORDER BY clause with whitelisted columns to prevent SQL injection
+	allowedSortColumns := map[string]bool{
+		"timestamp":      true,
+		"user_name":      true,
+		"category":       true,
+		"action":         true,
+		"document_name":  true,
+		"project":        true,
+		"environment":    true,
+		"tenant":         true,
+		"correlation_id": true,
+		"trace_id":       true,
+		"created_at":     true,
+	}
+
 	sortBy := query.SortBy
 	if sortBy == "" {
 		sortBy = "timestamp"
 	}
+
+	// Validate sortBy against whitelist
+	if !allowedSortColumns[sortBy] {
+		return nil, 0, fmt.Errorf("invalid sort column: %s", sortBy)
+	}
+
 	sortOrder := strings.ToUpper(query.SortOrder)
 	if sortOrder != "ASC" && sortOrder != "DESC" {
 		sortOrder = "DESC"

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -39,9 +40,21 @@ func (h *EventHandler) SearchEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate page size to prevent DoS attacks
+	const maxPageSize = 1000
+	if req.Size > maxPageSize {
+		h.logger.Warn("page size exceeds maximum", "requested", req.Size, "max", maxPageSize)
+		http.Error(w, fmt.Sprintf("Page size too large (max %d)", maxPageSize), http.StatusBadRequest)
+		return
+	}
+
 	h.logger.Debug("searching events", "request", req)
 
-	result, err := h.eventService.SearchEvents(r.Context(), req)
+	// Add context timeout to prevent hanging requests
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	result, err := h.eventService.SearchEvents(ctx, req)
 	if err != nil {
 		h.logger.Error("failed to search events", "error", err)
 		http.Error(w, "Failed to search events", http.StatusInternalServerError)
@@ -68,6 +81,8 @@ func (h *EventHandler) ExportEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.logger.Info("export request received", "user", req.User, "category", req.Category)
+
 	// Generate filename with UTC timestamp
 	timestamp := time.Now().UTC().Format("20060102_150405")
 	filename := fmt.Sprintf("events-export_%s_utc.csv", timestamp)
@@ -75,7 +90,11 @@ func (h *EventHandler) ExportEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/csv")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 
-	if err := h.eventService.ExportCSV(r.Context(), req, w); err != nil {
+	// Add longer timeout for export operations
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+
+	if err := h.eventService.ExportCSV(ctx, req, w); err != nil {
 		h.logger.Error("failed to export events", "error", err)
 		// Can't send error response after headers are written
 		return
