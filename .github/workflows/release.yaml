@@ -102,7 +102,7 @@ jobs:
       - name: Build Docker images
         run: |
           # Build service image
-          docker build . --rm \
+          docker build . --rm --no-cache \
             --target service \
             --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-service:${{ steps.version.outputs.version }} \
             --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-service:latest \
@@ -110,7 +110,7 @@ jobs:
             --build-arg VERSION='${{ steps.version.outputs.version }}'
 
           # Build worker image
-          docker build . --rm \
+          docker build . --rm --no-cache \
             --target worker \
             --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-worker:${{ steps.version.outputs.version }} \
             --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-worker:latest \
@@ -118,7 +118,7 @@ jobs:
             --build-arg VERSION='${{ steps.version.outputs.version }}'
 
           # Build migrations image
-          docker build . --rm \
+          docker build . --rm --no-cache \
             --target migrations \
             --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrations:${{ steps.version.outputs.version }} \
             --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-migrations:latest
