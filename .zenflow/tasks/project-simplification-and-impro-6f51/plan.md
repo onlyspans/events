@@ -492,7 +492,8 @@ AUTO_MIGRATE=false ./bin/events  # Should start without running migrations
 
 ---
 
-### [ ] Phase 2 - Task 10: Update Docker Compose to Remove Migration Container
+### [x] Phase 2 - Task 10: Update Docker Compose to Remove Migration Container
+<!-- chat-id: a94e4cd9-aa91-4015-9410-ac62f20b7a3c -->
 
 **Goal**: Remove separate `migrate` service from docker-compose.yaml now that migrations are embedded.
 
@@ -524,10 +525,10 @@ docker compose ps  # Should only show postgres, events (and kafka/zookeeper if e
 ```
 
 **Acceptance Criteria**:
-- [ ] `migrate` service removed from docker-compose.yaml
-- [ ] Fresh deployments work correctly (migrations run automatically)
-- [ ] Container count reduced (from 3 to 2 in minimal setup)
-- [ ] README updated to reflect automatic migrations
+- [x] `migrate` service removed from docker-compose.yaml
+- [x] Fresh deployments work correctly (migrations run automatically)
+- [x] Container count reduced (from 3 to 2 in minimal setup)
+- [x] README updated to reflect automatic migrations
 
 ---
 
