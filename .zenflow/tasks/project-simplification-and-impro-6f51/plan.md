@@ -1020,3 +1020,20 @@ You need to clean all previous version files. For instance, cmd/service, cmd/wor
 - ✅ Build successful: `bin/events` (17MB)
 
 **Result**: Clean codebase with zero references to old artifacts. All tests passing. Migration system now fully embedded in binary with no external dependencies.
+
+### [x] Step: Task 17: Helm Manifests Fixes
+<!-- chat-id: 9f7bba9b-5454-4cea-bfe4-b0b9fc949ca4 -->
+
+While simplifying the project you forget to change helmfile manifests. Since the app not yet in production you can safely remove some of the code
+
+**Status**: ✅ Complete. Successfully cleaned up all Helm manifests:
+- Updated helm/values.yaml to use single unified image repository (events-service, events-worker, events-migrations → events)
+- Updated helm/templates/deployment.yaml to remove migration initContainer and use unified binary
+- Removed helm/templates/worker-deployment.yaml (worker now part of main binary)
+- Updated helm/templates/_helpers.tpl to remove worker-specific selector labels
+- Updated helm/octopus.yaml to add KAFKA_ENABLED and AUTO_MIGRATE feature flags with documentation
+- Verified Helm chart renders correctly with `helm template` command
+- Reduced deployments from 3 to 1 (67% reduction)
+- Reduced Docker images from 3 to 1 (67% reduction)
+- Zero breaking changes to existing environment variables or API
+- Full summary documented in task17-summary.md

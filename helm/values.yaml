@@ -1,7 +1,5 @@
 image:
-  serviceRepository: onlyspans-private.registry.twcstorage.ru/events-service
-  workerRepository: onlyspans-private.registry.twcstorage.ru/events-worker
-  migrationRepository: onlyspans-private.registry.twcstorage.ru/events-migrations
+  repository: onlyspans-private.registry.twcstorage.ru/events
   pullPolicy: IfNotPresent
   tag: ""  # Will be set by Octopus
 
@@ -44,25 +42,15 @@ ingress:
           pathType: Prefix
   tls: []
 
-service:
-  replicaCount: 1
-  resources:
-    limits:
-      cpu: 128m
-      memory: 128Mi
-    requests:
-      cpu: 128m
-      memory: 128Mi
+replicaCount: 1
 
-worker:
-  replicaCount: 1
-  resources:
-    limits:
-      cpu: 128m
-      memory: 128Mi
-    requests:
-      cpu: 128m
-      memory: 128Mi
+resources:
+  limits:
+    cpu: 256m
+    memory: 256Mi
+  requests:
+    cpu: 128m
+    memory: 128Mi
 
 livenessProbe:
   httpGet:

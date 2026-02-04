@@ -8,19 +8,32 @@ imagePullSecrets:
   - name: craas-onlyspans-private
 
 env:
+  # Database Configuration
   POSTGRES_HOST: "#{Postgres.Host}"
   POSTGRES_PORT: "#{Postgres.Port}"
   POSTGRES_DB: "#{Postgres.Database}"
   POSTGRES_USER: "#{Postgres.User}"
   POSTGRES_PASSWORD: "#{Postgres.Password}"
   POSTGRES_SSLMODE: "require"
+
+  # Feature Flags
+  KAFKA_ENABLED: "true"  # Enable Kafka consumer (set to "false" for HTTP-only mode)
+  AUTO_MIGRATE: "true"   # Run database migrations on startup
+
+  # Kafka Configuration (only used when KAFKA_ENABLED=true)
   KAFKA_HOST: "#{Kafka.Host}"
   KAFKA_PORT: "#{Kafka.Port}"
   KAFKA_TOPIC: "event-logs"
   KAFKA_GROUP_ID: "event-logs-group"
   KAFKA_USERNAME: "#{Kafka.Username}"
   KAFKA_PASSWORD: "#{Kafka.Password}"
+
+  # Server Configuration
   SERVER_PORT: "8080"
+
+  # Event Retention
   RETENTION_PERIOD_DAYS: "90"
-  MAX_EXPORT_SIZE: "10000"
   RETENTION_CRON: "0 2 * * *"
+
+  # Export Limits
+  MAX_EXPORT_SIZE: "10000"
