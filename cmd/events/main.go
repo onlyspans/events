@@ -44,7 +44,7 @@ func main() {
 	)
 
 	// Connect to database
-	db, err := sql.Open("postgres", cfg.Database.DSN())
+	db, err := sql.Open("postgres", cfg.Database.DSN)
 	if err != nil {
 		logger.Error("failed to open database connection", "error", err)
 		os.Exit(1)
@@ -68,7 +68,7 @@ func main() {
 
 	// Run database migrations if auto-migrate is enabled
 	if cfg.Features.AutoMigrate {
-		if err := migrator.Run(cfg.Database.DSN()); err != nil {
+		if err := migrator.Run(cfg.Database.DSN); err != nil {
 			logger.Error("migration failed", "error", err)
 			os.Exit(1)
 		}
@@ -166,7 +166,7 @@ func main() {
 
 		g.Go(func() error {
 			logger.Info("starting Kafka consumer",
-				"broker", cfg.Kafka.BrokerAddress(),
+				"brokers", cfg.Kafka.Brokers,
 				"topic", cfg.Kafka.Topic,
 				"group_id", cfg.Kafka.GroupID,
 			)

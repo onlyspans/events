@@ -20,20 +20,15 @@ services:
     ports:
       - '8080:8080'
     environment:
-      # Database configuration
-      - POSTGRES_HOST=postgres
-      - POSTGRES_PORT=5432
-      - POSTGRES_DB=${POSTGRES_DB:-events}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      # Database configuration (DSN format)
+      - POSTGRES_DSN=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-events}?sslmode=disable
 
       # Feature flags (Kafka disabled by default)
       - KAFKA_ENABLED=${KAFKA_ENABLED:-false}
       - AUTO_MIGRATE=${AUTO_MIGRATE:-true}
 
       # Kafka configuration (only used if KAFKA_ENABLED=true)
-      - KAFKA_HOST=${KAFKA_HOST:-kafka}
-      - KAFKA_PORT=${KAFKA_PORT:-29092}
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:29092}
       - KAFKA_TOPIC=${KAFKA_TOPIC:-event-logs}
       - KAFKA_GROUP_ID=${KAFKA_GROUP_ID:-event-logs-group}
 

@@ -1037,3 +1037,20 @@ While simplifying the project you forget to change helmfile manifests. Since the
 - Reduced Docker images from 3 to 1 (67% reduction)
 - Zero breaking changes to existing environment variables or API
 - Full summary documented in task17-summary.md
+
+### [x] Step: Task 18: Improve Postgres and Kafka Connection Configs
+<!-- chat-id: 8b0ca589-27e5-4cb4-a4c1-8bf64dc0e772 -->
+
+It would be better to use DSN instead of a prefixed variables set. The configuration must become simplier
+
+**Status**: ✅ Complete. Successfully simplified configuration system:
+- Reduced connection string configuration from 8 to 2 environment variables (75% reduction)
+- PostgreSQL: Single `POSTGRES_DSN` variable (e.g., "postgres://user:pass@host:port/db?sslmode=disable")
+- Kafka: Single `KAFKA_BROKERS` variable (e.g., "broker1:9092,broker2:9092")
+- Removed all individual field variables (POSTGRES_HOST, POSTGRES_PORT, POSTGRES_USER, KAFKA_HOST, KAFKA_PORT)
+- Updated all code to use DSN fields directly (no complex parsing logic)
+- Updated configuration files: .env.example, compose.yaml, helm/octopus.yaml
+- All tests passing (config tests, integration tests)
+- Full summary documented in task18-summary.md
+
+**Breaking Change**: ⚠️ This is a breaking change - all deployments must update from individual variables to DSN format

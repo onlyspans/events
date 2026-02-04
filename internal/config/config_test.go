@@ -198,8 +198,8 @@ func TestLoad_MinimalConfiguration(t *testing.T) {
 	// Clear all environment variables to test minimal config
 	envVars := []string{
 		"SERVER_PORT",
-		"POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB", "POSTGRES_SSLMODE",
-		"KAFKA_ENABLED", "KAFKA_HOST", "KAFKA_PORT", "KAFKA_TOPIC", "KAFKA_GROUP_ID",
+		"POSTGRES_DSN",
+		"KAFKA_ENABLED", "KAFKA_BROKERS", "KAFKA_TOPIC", "KAFKA_GROUP_ID",
 		"RETENTION_PERIOD_DAYS", "MAX_EXPORT_SIZE", "RETENTION_CRON",
 		"AUTO_MIGRATE",
 	}
@@ -216,23 +216,11 @@ func TestLoad_MinimalConfiguration(t *testing.T) {
 	if cfg.Server.Port != "8080" {
 		t.Errorf("expected default SERVER_PORT=8080, got %s", cfg.Server.Port)
 	}
-	if cfg.Database.Host != "localhost" {
-		t.Errorf("expected default POSTGRES_HOST=localhost, got %s", cfg.Database.Host)
+	if cfg.Database.DSN != "" {
+		t.Errorf("expected empty default POSTGRES_DSN, got %s", cfg.Database.DSN)
 	}
-	if cfg.Database.Port != "5432" {
-		t.Errorf("expected default POSTGRES_PORT=5432, got %s", cfg.Database.Port)
-	}
-	if cfg.Database.User != "postgres" {
-		t.Errorf("expected default POSTGRES_USER=postgres, got %s", cfg.Database.User)
-	}
-	if cfg.Database.Password != "" {
-		t.Errorf("expected empty default POSTGRES_PASSWORD (required), got %s", cfg.Database.Password)
-	}
-	if cfg.Database.DBName != "events" {
-		t.Errorf("expected default POSTGRES_DB=events, got %s", cfg.Database.DBName)
-	}
-	if cfg.Database.SSLMode != "disable" {
-		t.Errorf("expected default POSTGRES_SSLMODE=disable, got %s", cfg.Database.SSLMode)
+	if cfg.Kafka.Brokers != "localhost:9092" {
+		t.Errorf("expected default KAFKA_BROKERS=localhost:9092, got %s", cfg.Kafka.Brokers)
 	}
 	if cfg.EventLog.RetentionPeriodDays != 90 {
 		t.Errorf("expected default RETENTION_PERIOD_DAYS=90, got %d", cfg.EventLog.RetentionPeriodDays)
@@ -251,12 +239,12 @@ func TestLoad_MinimalConfiguration(t *testing.T) {
 	}
 }
 
-func TestLoad_RequiredVsOptionalVariables(t *testing.T) {
-	// Test that service can start with only POSTGRES_PASSWORD set
+func TestLoad_WithPostgresDSN(t *testing.T) {
+	// Clear all environment variables
 	envVars := []string{
 		"SERVER_PORT",
-		"POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB", "POSTGRES_SSLMODE",
-		"KAFKA_ENABLED", "KAFKA_HOST", "KAFKA_PORT", "KAFKA_TOPIC", "KAFKA_GROUP_ID",
+		"POSTGRES_DSN",
+		"KAFKA_ENABLED", "KAFKA_BROKERS", "KAFKA_TOPIC", "KAFKA_GROUP_ID",
 		"RETENTION_PERIOD_DAYS", "MAX_EXPORT_SIZE", "RETENTION_CRON",
 		"AUTO_MIGRATE",
 	}
@@ -269,27 +257,105 @@ func TestLoad_RequiredVsOptionalVariables(t *testing.T) {
 		}
 	}()
 
-	// Set only the required variable
-	os.Setenv("POSTGRES_PASSWORD", "test-password")
+	// Set only POSTGRES_DSN
+	testDSN := "postgres://testuser:testpass@testhost:5433/testdb?sslmode=require"
+	os.Setenv("POSTGRES_DSN", testDSN)
 
 	cfg, err := Load()
 	if err != nil {
-		t.Fatalf("Load() with only POSTGRES_PASSWORD set should succeed, got error: %v", err)
+		t.Fatalf("Load() failed: %v", err)
 	}
 
-	// Verify required field is set
-	if cfg.Database.Password != "test-password" {
-		t.Errorf("expected POSTGRES_PASSWORD=test-password, got %s", cfg.Database.Password)
+	// Verify DSN field is set
+	if cfg.Database.DSN != testDSN {
+		t.Errorf("expected POSTGRES_DSN=%q, got %q", testDSN, cfg.Database.DSN)
+	}
+}
+
+func TestLoad_WithKafkaBrokers(t *testing.T) {
+	// Clear all environment variables
+	envVars := []string{
+		"SERVER_PORT",
+		"POSTGRES_DSN",
+		"KAFKA_ENABLED", "KAFKA_BROKERS", "KAFKA_TOPIC", "KAFKA_GROUP_ID",
+		"RETENTION_PERIOD_DAYS", "MAX_EXPORT_SIZE", "RETENTION_CRON",
+		"AUTO_MIGRATE",
+	}
+	for _, v := range envVars {
+		os.Unsetenv(v)
+	}
+	defer func() {
+		for _, v := range envVars {
+			os.Unsetenv(v)
+		}
+	}()
+
+	// Set Kafka brokers
+	testBrokers := "broker1:9092,broker2:9093,broker3:9094"
+	os.Setenv("KAFKA_BROKERS", testBrokers)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
 	}
 
-	// Verify all defaults are applied
-	if cfg.Server.Port != "8080" {
-		t.Errorf("expected default SERVER_PORT=8080, got %s", cfg.Server.Port)
+	// Verify Brokers field is set
+	if cfg.Kafka.Brokers != testBrokers {
+		t.Errorf("expected KAFKA_BROKERS=%q, got %q", testBrokers, cfg.Kafka.Brokers)
 	}
-	if cfg.Database.Host != "localhost" {
-		t.Errorf("expected default POSTGRES_HOST=localhost, got %s", cfg.Database.Host)
+
+	// Verify GetBrokers() returns parsed brokers
+	brokers := cfg.Kafka.GetBrokers()
+	expectedBrokers := []string{"broker1:9092", "broker2:9093", "broker3:9094"}
+
+	if len(brokers) != len(expectedBrokers) {
+		t.Errorf("expected %d brokers, got %d", len(expectedBrokers), len(brokers))
+		return
 	}
-	if cfg.Database.User != "postgres" {
-		t.Errorf("expected default POSTGRES_USER=postgres, got %s", cfg.Database.User)
+
+	for i, broker := range brokers {
+		if broker != expectedBrokers[i] {
+			t.Errorf("broker[%d] = %q; want %q", i, broker, expectedBrokers[i])
+		}
+	}
+}
+
+func TestKafkaConfig_GetBrokers(t *testing.T) {
+	tests := []struct {
+		name     string
+		brokers  string
+		expected []string
+	}{
+		{
+			name:     "single broker",
+			brokers:  "localhost:9092",
+			expected: []string{"localhost:9092"},
+		},
+		{
+			name:     "multiple brokers",
+			brokers:  "localhost:9092,localhost:9093,localhost:9094",
+			expected: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := KafkaConfig{
+				Brokers: tt.brokers,
+			}
+
+			result := cfg.GetBrokers()
+
+			if len(result) != len(tt.expected) {
+				t.Errorf("GetBrokers() returned %d brokers; want %d", len(result), len(tt.expected))
+				return
+			}
+
+			for i, broker := range result {
+				if broker != tt.expected[i] {
+					t.Errorf("GetBrokers()[%d] = %q; want %q", i, broker, tt.expected[i])
+				}
+			}
+		})
 	}
 }

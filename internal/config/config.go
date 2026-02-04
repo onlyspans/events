@@ -1,10 +1,10 @@
 package config
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -12,27 +12,22 @@ import (
 
 // Config holds all application configuration.
 //
-// Environment Variables (Required vs Optional):
+// Environment Variables:
 //
 // Required:
-//   - POSTGRES_PASSWORD: Database password (no default for security)
+//   - POSTGRES_DSN: PostgreSQL connection string
+//     Example: "postgres://user:pass@localhost:5432/dbname?sslmode=disable"
 //
-// Optional (with defaults):
+// Optional:
 //   - SERVER_PORT (default: 8080)
-//   - POSTGRES_HOST (default: localhost)
-//   - POSTGRES_PORT (default: 5432)
-//   - POSTGRES_USER (default: postgres)
-//   - POSTGRES_DB (default: events)
-//   - POSTGRES_SSLMODE (default: disable)
 //   - KAFKA_ENABLED (default: false)
 //   - AUTO_MIGRATE (default: true)
 //   - RETENTION_PERIOD_DAYS (default: 90)
 //   - MAX_EXPORT_SIZE (default: 10000)
 //   - RETENTION_CRON (default: "0 2 * * *")
 //
-// Optional (Kafka-only, used when KAFKA_ENABLED=true):
-//   - KAFKA_HOST (default: localhost)
-//   - KAFKA_PORT (default: 9092)
+// Kafka Configuration (when KAFKA_ENABLED=true):
+//   - KAFKA_BROKERS: Comma-separated broker addresses (e.g., "localhost:9092,broker2:9092")
 //   - KAFKA_TOPIC (default: event-logs)
 //   - KAFKA_GROUP_ID (default: event-logs-group)
 //   - KAFKA_USERNAME (optional, enables SASL/SCRAM)
@@ -63,18 +58,14 @@ type ServerConfig struct {
 
 // DatabaseConfig holds PostgreSQL configuration.
 type DatabaseConfig struct {
-	Host     string
-	Port     string
-	User     string
-	Password string
-	DBName   string
-	SSLMode  string
+	// DSN is the PostgreSQL connection string (e.g., "postgres://user:pass@localhost:5432/dbname?sslmode=disable")
+	DSN string
 }
 
 // KafkaConfig holds Kafka configuration.
 type KafkaConfig struct {
-	Host              string
-	Port              string
+	// Brokers is a comma-separated list of broker addresses (e.g., "localhost:9092,localhost:9093")
+	Brokers           string
 	Topic             string
 	GroupID           string
 	Username          string
@@ -108,16 +99,10 @@ func Load() (*Config, error) {
 			Port: getEnv("SERVER_PORT", "8080"),
 		},
 		Database: DatabaseConfig{
-			Host:     getEnv("POSTGRES_HOST", "localhost"),
-			Port:     getEnv("POSTGRES_PORT", "5432"),
-			User:     getEnv("POSTGRES_USER", "postgres"),
-			Password: getEnv("POSTGRES_PASSWORD", ""), // Required: no default for security
-			DBName:   getEnv("POSTGRES_DB", "events"),
-			SSLMode:  getEnv("POSTGRES_SSLMODE", "disable"),
+			DSN: getEnv("POSTGRES_DSN", ""),
 		},
 		Kafka: KafkaConfig{
-			Host:              getEnv("KAFKA_HOST", "localhost"),
-			Port:              getEnv("KAFKA_PORT", "9092"),
+			Brokers:           getEnv("KAFKA_BROKERS", "localhost:9092"),
 			Topic:             getEnv("KAFKA_TOPIC", "event-logs"),
 			GroupID:           getEnv("KAFKA_GROUP_ID", "event-logs-group"),
 			Username:          getEnv("KAFKA_USERNAME", ""),
@@ -142,17 +127,10 @@ func Load() (*Config, error) {
 	return cfg, nil
 }
 
-// DSN returns the PostgreSQL connection string.
-func (c *DatabaseConfig) DSN() string {
-	return fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		c.Host, c.Port, c.User, c.Password, c.DBName, c.SSLMode,
-	)
-}
 
-// BrokerAddress returns the Kafka broker address.
-func (c *KafkaConfig) BrokerAddress() string {
-	return fmt.Sprintf("%s:%s", c.Host, c.Port)
+// GetBrokers returns a list of Kafka broker addresses.
+func (c *KafkaConfig) GetBrokers() []string {
+	return strings.Split(c.Brokers, ",")
 }
 
 // FetchMaxWait returns the fetch max wait duration.
@@ -210,3 +188,4 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 	}
 	return value
 }
+
