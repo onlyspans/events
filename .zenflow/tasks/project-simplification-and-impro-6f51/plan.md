@@ -585,7 +585,8 @@ curl http://localhost:8080/settings  # Should show default retention and export 
 
 ---
 
-### [ ] Phase 3 - Task 12: Create Minimal Configuration Example
+### [x] Phase 3 - Task 12: Create Minimal Configuration Example
+<!-- chat-id: 8f277e3a-0aaf-4aba-ab8d-a1303a95a69e -->
 
 **Goal**: Create `.env.example` with minimal required configuration.
 
@@ -633,10 +634,21 @@ curl http://localhost:8080/healthz
 ```
 
 **Acceptance Criteria**:
-- [ ] `.env.example` contains ≤10 variables
-- [ ] Required variables are clearly marked
-- [ ] Comments explain when to override defaults
-- [ ] README references `.env.example` in quickstart
+- [x] `.env.example` contains ≤10 variables
+- [x] Required variables are clearly marked
+- [x] Comments explain when to override defaults
+- [x] README references `.env.example` in quickstart
+
+**Status**: ✅ Complete. Successfully created comprehensive configuration examples:
+- `.env.example` - Minimal configuration with 1 required variable (POSTGRES_PASSWORD)
+- `.env.kafka.example` - Kafka-enabled configuration with 6 active variables
+- Updated README with clear Configuration section including:
+  - Quick setup instructions for both deployment modes
+  - Required vs Optional variables reference
+  - Step-by-step guides for minimal and Kafka deployments
+- Both examples well under ≤10 variable limit
+- All variables documented with descriptions and defaults
+- Full summary documented in task12-summary.md
 
 ---
 
