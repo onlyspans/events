@@ -124,10 +124,14 @@ docker compose up       # Starts PostgreSQL and events service
                         # Kafka is NOT started by default (KAFKA_ENABLED=false)
 
 # Full deployment with Kafka (4 containers: postgres + events + zookeeper + kafka)
-KAFKA_ENABLED=true docker compose up
+# Option 1: Using compose override (recommended - automatically sets KAFKA_ENABLED=true)
+docker compose -f compose.yaml -f compose.kafka.yaml up
+
+# Option 2: Using profiles (requires KAFKA_ENABLED=true in .env)
+docker compose --profile kafka up
 
 # Build Docker image
-make docker-build       # Build Docker image locally
+make docker-build       # Build Docker image locally (builds events:latest)
 ```
 
 ## Configuration

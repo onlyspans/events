@@ -52,9 +52,10 @@ services:
       retries: 3
       start_period: 40s
 
-  # Kafka infrastructure (optional - enable by setting KAFKA_ENABLED=true)
+  # Kafka infrastructure (optional - enable with: docker compose --profile kafka up)
   zookeeper:
     image: 'confluentinc/cp-zookeeper:7.5.0'
+    profiles: ["kafka"]
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -63,6 +64,7 @@ services:
 
   kafka:
     image: 'confluentinc/cp-kafka:7.5.0'
+    profiles: ["kafka"]
     depends_on:
       - zookeeper
     ports:
