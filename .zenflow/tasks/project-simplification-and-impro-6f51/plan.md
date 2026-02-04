@@ -185,7 +185,8 @@ go test ./internal/dto/... -run TestEventIngestRequest_Validate -v
 
 ---
 
-### [ ] Phase 1 - Task 4: Add Event Service Methods for Ingestion
+### [x] Phase 1 - Task 4: Add Event Service Methods for Ingestion
+<!-- chat-id: 23dc37e7-3168-452c-b1c1-290af8e0e55f -->
 
 **Goal**: Extend `EventService` with methods to create events from HTTP requests.
 
@@ -219,11 +220,11 @@ go test ./internal/service/... -short -v
 ```
 
 **Acceptance Criteria**:
-- [ ] `CreateEvent()` successfully creates events with proper defaults
-- [ ] `CreateEventsBatch()` processes all events and returns detailed response
-- [ ] Partial success behavior works (some succeed, some fail)
-- [ ] Unit tests use mocked repository (no DB dependency)
-- [ ] Error cases are properly handled and tested
+- [x] `CreateEvent()` successfully creates events with proper defaults
+- [x] `CreateEventsBatch()` processes all events and returns detailed response
+- [x] Partial success behavior works (some succeed, some fail)
+- [x] Unit tests use mocked repository (no DB dependency)
+- [x] Error cases are properly handled and tested
 
 ---
 
