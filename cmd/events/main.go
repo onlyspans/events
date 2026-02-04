@@ -12,10 +12,13 @@ import (
 
 	_ "github.com/lib/pq"
 	"github.com/onlyspans/events/internal/config"
+	"github.com/onlyspans/events/internal/consumer"
 	"github.com/onlyspans/events/internal/handler"
+	"github.com/onlyspans/events/internal/migrator"
 	"github.com/onlyspans/events/internal/repository"
 	"github.com/onlyspans/events/internal/service"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -34,8 +37,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Log feature flags status
+	logger.Info("feature flags",
+		"kafka_enabled", cfg.Features.KafkaEnabled,
+		"auto_migrate", cfg.Features.AutoMigrate,
+	)
+
 	// Connect to database
-	db, err := sql.Open("postgres", cfg.Database.DSN())
+	db, err := sql.Open("postgres", cfg.Database.DSN)
 	if err != nil {
 		logger.Error("failed to open database connection", "error", err)
 		os.Exit(1)
@@ -56,6 +65,16 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("database connection established")
+
+	// Run database migrations if auto-migrate is enabled
+	if cfg.Features.AutoMigrate {
+		if err := migrator.Run(cfg.Database.DSN); err != nil {
+			logger.Error("migration failed", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		logger.Info("auto-migrate disabled, skipping database migrations")
+	}
 
 	// Initialize repositories
 	eventRepo := repository.NewEventRepository(db)
@@ -88,6 +107,8 @@ func main() {
 	// Event routes
 	mux.HandleFunc("/events", eventHandler.SearchEvents)
 	mux.HandleFunc("/events/export", eventHandler.ExportEvents)
+	mux.HandleFunc("/events/ingest", eventHandler.IngestEvent)
+	mux.HandleFunc("/events/ingest/batch", eventHandler.IngestEventsBatch)
 
 	// Settings routes
 	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
@@ -117,32 +138,92 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Start server in goroutine
-	go func() {
+	// Create context for graceful shutdown
+	ctx, cancel = context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create errgroup to manage goroutines
+	g, gctx := errgroup.WithContext(ctx)
+
+	// Start HTTP server in errgroup
+	g.Go(func() error {
 		logger.Info("starting HTTP server", "port", cfg.Server.Port)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Error("HTTP server error", "error", err)
+			return err
+		}
+		return nil
+	})
+
+	// Start Kafka consumer if enabled
+	if cfg.Features.KafkaEnabled {
+		kafkaConsumer, err := consumer.NewKafkaConsumer(&cfg.Kafka, eventService, logger)
+		if err != nil {
+			logger.Error("failed to create kafka consumer", "error", err)
 			os.Exit(1)
 		}
-	}()
+		defer kafkaConsumer.Close()
 
-	// Wait for interrupt signal to gracefully shutdown the server
+		g.Go(func() error {
+			logger.Info("starting Kafka consumer",
+				"brokers", cfg.Kafka.Brokers,
+				"topic", cfg.Kafka.Topic,
+				"group_id", cfg.Kafka.GroupID,
+			)
+			if err := kafkaConsumer.Start(gctx); err != nil {
+				logger.Error("kafka consumer error", "error", err)
+				return err
+			}
+			return nil
+		})
+	} else {
+		logger.Info("Kafka consumer disabled")
+	}
+
+	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
 
-	logger.Info("shutting down server")
+	// Wait for either interrupt signal or errgroup error
+	select {
+	case <-quit:
+		logger.Info("received shutdown signal")
+	case <-gctx.Done():
+		logger.Info("errgroup context cancelled")
+	}
+
+	logger.Info("shutting down service")
+
+	// Cancel context to stop all goroutines
+	cancel()
 
 	// Graceful shutdown with timeout
-	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer shutdownCancel()
 
-	if err := server.Shutdown(ctx); err != nil {
-		logger.Error("server forced to shutdown", "error", err)
+	// Shutdown HTTP server
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		logger.Error("HTTP server forced to shutdown", "error", err)
+	}
+
+	// Wait for errgroup goroutines to finish with timeout
+	errChan := make(chan error, 1)
+	go func() {
+		errChan <- g.Wait()
+	}()
+
+	select {
+	case err := <-errChan:
+		if err != nil {
+			logger.Error("service stopped with error", "error", err)
+			os.Exit(1)
+		}
+	case <-shutdownCtx.Done():
+		logger.Error("shutdown timeout exceeded")
 		os.Exit(1)
 	}
 
-	logger.Info("server stopped gracefully")
+	logger.Info("service stopped gracefully")
 }
 
 // loggingMiddleware logs HTTP requests.

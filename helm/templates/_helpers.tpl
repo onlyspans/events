@@ -41,21 +41,11 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
-Selector labels for service
+Selector labels
 */}}
 {{- define "events.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "events.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
-app.kubernetes.io/component: service
-{{- end }}
-
-{{/*
-Selector labels for worker
-*/}}
-{{- define "events.workerSelectorLabels" -}}
-app.kubernetes.io/name: {{ include "events.name" . }}
-app.kubernetes.io/instance: {{ .Release.Name }}
-app.kubernetes.io/component: worker
 {{- end }}
 
 {{/*

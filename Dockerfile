@@ -1,41 +1,32 @@
-# build
+# Build stage
 FROM golang:1.25 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
 WORKDIR /workspace
 
-COPY go.mod go.mod
-COPY go.sum go.sum
-
+# Copy go mod files and download dependencies
+COPY go.mod go.sum ./
 RUN go mod download
 
+# Copy source code
 COPY cmd/ cmd/
 COPY internal/ internal/
 
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o events-service cmd/service/main.go
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o events-worker cmd/worker/main.go
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.0
+# Build unified binary
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o events ./cmd/events
 
-# service
-FROM gcr.io/distroless/static:nonroot AS service
+# Runtime stage
+FROM gcr.io/distroless/static:nonroot
 WORKDIR /app
-COPY --from=builder /workspace/events-service .
+
+# Copy binary from builder
+COPY --from=builder /workspace/events .
+
+# Run as non-root user
 USER 65532:65532
-ENTRYPOINT ["/app/events-service"]
 
-# worker
-FROM gcr.io/distroless/static:nonroot AS worker
-WORKDIR /app
-COPY --from=builder /workspace/events-worker .
-USER 65532:65532
-ENTRYPOINT ["/app/events-worker"]
+# Expose HTTP port
+EXPOSE 8080
 
-# migrations
-FROM gcr.io/distroless/static:nonroot AS migrations
-WORKDIR /app
-
-COPY --from=builder /go/bin/migrate /usr/local/bin/migrate
-COPY migrations/ migrations/
-
-ENTRYPOINT ["migrate"]
+ENTRYPOINT ["/app/events"]

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/onlyspans/events/internal/domain"
 )
 
@@ -18,6 +19,40 @@ type EventRepository struct {
 // NewEventRepository creates a new EventRepository.
 func NewEventRepository(db *sql.DB) *EventRepository {
 	return &EventRepository{db: db}
+}
+
+// Create inserts a single event into the database and returns its ID.
+// This method is used for HTTP ingestion of individual events.
+func (r *EventRepository) Create(ctx context.Context, event *domain.Event) (uuid.UUID, error) {
+	query := `
+		INSERT INTO events (
+			id, timestamp, user_name, category, action, document_name,
+			project, environment, tenant, correlation_id, trace_id, details
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		RETURNING id
+	`
+
+	var id uuid.UUID
+	err := r.db.QueryRowContext(ctx, query,
+		event.ID,
+		event.Timestamp,
+		nullString(event.User),
+		nullString(event.Category),
+		nullString(event.Action),
+		nullString(event.DocumentName),
+		nullString(event.Project),
+		nullString(event.Environment),
+		nullString(event.Tenant),
+		nullString(event.CorrelationID),
+		nullString(event.TraceID),
+		event.Details,
+	).Scan(&id)
+
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("failed to insert event: %w", err)
+	}
+
+	return id, nil
 }
 
 // SaveBatch saves multiple events in a single transaction for efficiency.

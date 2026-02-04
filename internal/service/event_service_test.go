@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -202,4 +203,313 @@ func TestSearchEvents(t *testing.T) {
 	if result.Events[0].User != "test-user" {
 		t.Errorf("Expected user 'test-user', got %s", result.Events[0].User)
 	}
+}
+
+func TestCreateEvent(t *testing.T) {
+	tests := []struct {
+		name      string
+		request   dto.EventIngestRequest
+		saveError error
+		wantErr   bool
+		errMsg    string
+	}{
+		{
+			name: "successful creation with all fields",
+			request: dto.EventIngestRequest{
+				UserName:      "test-user",
+				Category:      "test-category",
+				Action:        "test-action",
+				DocumentName:  "test-doc.txt",
+				Project:       "test-project",
+				Environment:   "production",
+				Tenant:        "tenant-1",
+				CorrelationID: "corr-123",
+				TraceID:       "trace-456",
+				Details: map[string]interface{}{
+					"ipAddress": "192.168.1.1",
+					"userAgent": "Mozilla/5.0",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "successful creation with only required fields",
+			request: dto.EventIngestRequest{
+				UserName: "test-user",
+				Category: "test-category",
+				Action:   "test-action",
+			},
+			wantErr: false,
+		},
+		{
+			name: "successful creation with timestamp defaulting",
+			request: dto.EventIngestRequest{
+				UserName:  "test-user",
+				Category:  "test-category",
+				Action:    "test-action",
+				Timestamp: time.Time{}, // Zero time, should be set to now
+			},
+			wantErr: false,
+		},
+		{
+			name: "missing required field: user_name",
+			request: dto.EventIngestRequest{
+				Category: "test-category",
+				Action:   "test-action",
+			},
+			wantErr: true,
+			errMsg:  "validation failed",
+		},
+		{
+			name: "missing required field: category",
+			request: dto.EventIngestRequest{
+				UserName: "test-user",
+				Action:   "test-action",
+			},
+			wantErr: true,
+			errMsg:  "validation failed",
+		},
+		{
+			name: "missing required field: action",
+			request: dto.EventIngestRequest{
+				UserName: "test-user",
+				Category: "test-category",
+			},
+			wantErr: true,
+			errMsg:  "validation failed",
+		},
+		{
+			name: "repository save error",
+			request: dto.EventIngestRequest{
+				UserName: "test-user",
+				Category: "test-category",
+				Action:   "test-action",
+			},
+			saveError: context.DeadlineExceeded,
+			wantErr:   true,
+			errMsg:    "failed to save event",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &mockEventRepository{
+				saveError: tt.saveError,
+			}
+			svc := NewEventService(repo, 10000)
+
+			eventID, err := svc.CreateEvent(context.Background(), tt.request)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Errorf("CreateEvent() expected error, got nil")
+				} else if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
+					t.Errorf("CreateEvent() error = %v, should contain %q", err, tt.errMsg)
+				}
+				if eventID != uuid.Nil {
+					t.Errorf("CreateEvent() expected nil UUID on error, got %v", eventID)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("CreateEvent() unexpected error: %v", err)
+				}
+				if eventID == uuid.Nil {
+					t.Errorf("CreateEvent() returned nil UUID on success")
+				}
+				if len(repo.events) != 1 {
+					t.Errorf("CreateEvent() expected 1 event saved, got %d", len(repo.events))
+				} else {
+					event := repo.events[0]
+					if event.User != tt.request.UserName {
+						t.Errorf("CreateEvent() user = %v, want %v", event.User, tt.request.UserName)
+					}
+					if event.Category != tt.request.Category {
+						t.Errorf("CreateEvent() category = %v, want %v", event.Category, tt.request.Category)
+					}
+					if event.Action != tt.request.Action {
+						t.Errorf("CreateEvent() action = %v, want %v", event.Action, tt.request.Action)
+					}
+					if event.Timestamp.IsZero() {
+						t.Errorf("CreateEvent() timestamp should not be zero")
+					}
+					if event.ID == uuid.Nil {
+						t.Errorf("CreateEvent() ID should not be nil")
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestCreateEventsBatch(t *testing.T) {
+	tests := []struct {
+		name             string
+		requests         []dto.EventIngestRequest
+		saveError        error
+		expectedSuccess  int
+		expectedFailure  int
+		expectedErrors   int
+		checkErrorIndices []int
+	}{
+		{
+			name: "all events successful",
+			requests: []dto.EventIngestRequest{
+				{UserName: "user1", Category: "cat1", Action: "action1"},
+				{UserName: "user2", Category: "cat2", Action: "action2"},
+				{UserName: "user3", Category: "cat3", Action: "action3"},
+			},
+			expectedSuccess: 3,
+			expectedFailure: 0,
+			expectedErrors:  0,
+		},
+		{
+			name: "partial success - validation errors",
+			requests: []dto.EventIngestRequest{
+				{UserName: "user1", Category: "cat1", Action: "action1"}, // Valid
+				{UserName: "", Category: "cat2", Action: "action2"},      // Missing user_name
+				{UserName: "user3", Category: "", Action: "action3"},     // Missing category
+				{UserName: "user4", Category: "cat4", Action: ""},        // Missing action
+				{UserName: "user5", Category: "cat5", Action: "action5"}, // Valid
+			},
+			expectedSuccess:   2,
+			expectedFailure:   3,
+			expectedErrors:    3,
+			checkErrorIndices: []int{1, 2, 3},
+		},
+		{
+			name: "all events with validation errors",
+			requests: []dto.EventIngestRequest{
+				{UserName: "", Category: "cat1", Action: "action1"},
+				{UserName: "user2", Category: "", Action: "action2"},
+				{UserName: "user3", Category: "cat3", Action: ""},
+			},
+			expectedSuccess:   0,
+			expectedFailure:   3,
+			expectedErrors:    3,
+			checkErrorIndices: []int{0, 1, 2},
+		},
+		{
+			name:            "empty batch",
+			requests:        []dto.EventIngestRequest{},
+			expectedSuccess: 0,
+			expectedFailure: 0,
+			expectedErrors:  0,
+		},
+		{
+			name: "single valid event",
+			requests: []dto.EventIngestRequest{
+				{UserName: "user1", Category: "cat1", Action: "action1"},
+			},
+			expectedSuccess: 1,
+			expectedFailure: 0,
+			expectedErrors:  0,
+		},
+		{
+			name: "events with optional fields",
+			requests: []dto.EventIngestRequest{
+				{
+					UserName:      "user1",
+					Category:      "cat1",
+					Action:        "action1",
+					DocumentName:  "doc1.txt",
+					Project:       "proj1",
+					Environment:   "prod",
+					Tenant:        "tenant1",
+					CorrelationID: "corr1",
+					TraceID:       "trace1",
+					Details: map[string]interface{}{
+						"ipAddress": "192.168.1.1",
+					},
+				},
+			},
+			expectedSuccess: 1,
+			expectedFailure: 0,
+			expectedErrors:  0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &mockEventRepository{
+				saveError: tt.saveError,
+			}
+			svc := NewEventService(repo, 10000)
+
+			response := svc.CreateEventsBatch(context.Background(), tt.requests)
+
+			if response.SuccessCount != tt.expectedSuccess {
+				t.Errorf("CreateEventsBatch() success count = %v, want %v",
+					response.SuccessCount, tt.expectedSuccess)
+			}
+			if response.FailureCount != tt.expectedFailure {
+				t.Errorf("CreateEventsBatch() failure count = %v, want %v",
+					response.FailureCount, tt.expectedFailure)
+			}
+			if len(response.Errors) != tt.expectedErrors {
+				t.Errorf("CreateEventsBatch() error count = %v, want %v",
+					len(response.Errors), tt.expectedErrors)
+			}
+
+			// Check that error indices are correct
+			if len(tt.checkErrorIndices) > 0 {
+				errorIndices := make(map[int]bool)
+				for _, err := range response.Errors {
+					errorIndices[err.Index] = true
+				}
+				for _, expectedIndex := range tt.checkErrorIndices {
+					if !errorIndices[expectedIndex] {
+						t.Errorf("CreateEventsBatch() expected error at index %d, not found",
+							expectedIndex)
+					}
+				}
+			}
+
+			// Verify repository received successful events
+			if len(repo.events) != tt.expectedSuccess {
+				t.Errorf("CreateEventsBatch() saved %d events, want %d",
+					len(repo.events), tt.expectedSuccess)
+			}
+		})
+	}
+}
+
+func TestCreateEventsBatch_RepositoryError(t *testing.T) {
+	// Test case where repository always fails to save events
+	failingRepo := &mockEventRepository{
+		saveError: context.DeadlineExceeded,
+	}
+
+	svc := NewEventService(failingRepo, 10000)
+
+	requests := []dto.EventIngestRequest{
+		{UserName: "user1", Category: "cat1", Action: "action1"},
+		{UserName: "user2", Category: "cat2", Action: "action2"},
+		{UserName: "user3", Category: "cat3", Action: "action3"},
+	}
+
+	response := svc.CreateEventsBatch(context.Background(), requests)
+
+	// All should fail because repository always fails
+	if response.SuccessCount != 0 {
+		t.Errorf("Expected 0 successful events, got %d", response.SuccessCount)
+	}
+	if response.FailureCount != 3 {
+		t.Errorf("Expected 3 failed events, got %d", response.FailureCount)
+	}
+	if len(response.Errors) != 3 {
+		t.Errorf("Expected 3 errors, got %d", len(response.Errors))
+	}
+
+	// Verify all error messages contain "failed to save event"
+	for i, err := range response.Errors {
+		if !contains(err.Error, "failed to save event") {
+			t.Errorf("Error at index %d should contain 'failed to save event', got: %s",
+				i, err.Error)
+		}
+	}
+}
+
+// contains checks if a string contains a substring
+func contains(s, substr string) bool {
+	return strings.Contains(s, substr)
 }

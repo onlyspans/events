@@ -40,6 +40,23 @@ type EventRepository interface {
 	DeleteOlderThan(ctx context.Context, cutoffDate time.Time) (int64, error)
 }
 
+var (
+	eventsIngestSingleCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "events_ingest_single_total",
+		Help: "Total number of single events ingested via HTTP",
+	})
+
+	eventsIngestBatchCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "events_ingest_batch_total",
+		Help: "Total number of batch events ingested via HTTP",
+	})
+
+	eventsIngestFailedCounter = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "events_ingest_failed_total",
+		Help: "Total number of events that failed to ingest",
+	})
+)
+
 // EventService handles event business logic.
 type EventService struct {
 	repo          EventRepository
@@ -318,4 +335,97 @@ func (s *EventService) entityToDTO(entity *domain.Event) dto.EventDTO {
 	}
 
 	return eventDTO
+}
+
+// CreateEvent creates a single event from an HTTP ingestion request.
+// It validates the request, sets default values for ID and timestamp,
+// and persists the event to the repository.
+func (s *EventService) CreateEvent(ctx context.Context, req dto.EventIngestRequest) (uuid.UUID, error) {
+	// Validate the request
+	if err := req.Validate(); err != nil {
+		eventsIngestFailedCounter.Inc()
+		return uuid.Nil, fmt.Errorf("validation failed: %w", err)
+	}
+
+	// Convert to domain event
+	event := req.ToEvent()
+
+	// Set ID if not already set
+	if event.ID == uuid.Nil {
+		event.ID = uuid.New()
+	}
+
+	// Set timestamp to now if not provided
+	if event.Timestamp.IsZero() {
+		event.Timestamp = time.Now()
+	}
+
+	// Set created_at timestamp
+	event.CreatedAt = time.Now()
+
+	// Persist to repository using batch method with single event
+	if err := s.repo.SaveBatch(ctx, []*domain.Event{event}); err != nil {
+		eventsIngestFailedCounter.Inc()
+		return uuid.Nil, fmt.Errorf("failed to save event: %w", err)
+	}
+
+	eventsIngestSingleCounter.Inc()
+	return event.ID, nil
+}
+
+// CreateEventsBatch processes a batch of event ingestion requests with partial success support.
+// Each event is validated and processed individually. Failed events do not stop processing
+// of the remaining events. Returns a detailed response with success/failure counts and error details.
+func (s *EventService) CreateEventsBatch(ctx context.Context, requests []dto.EventIngestRequest) dto.BatchIngestResponse {
+	response := dto.BatchIngestResponse{
+		SuccessCount: 0,
+		FailureCount: 0,
+		Errors:       []dto.BatchError{},
+	}
+
+	// Process each event individually to support partial success
+	for i, req := range requests {
+		// Validate the request
+		if err := req.Validate(); err != nil {
+			response.FailureCount++
+			response.Errors = append(response.Errors, dto.BatchError{
+				Index: i,
+				Error: fmt.Sprintf("validation failed: %v", err),
+			})
+			eventsIngestFailedCounter.Inc()
+			continue
+		}
+
+		// Convert to domain event
+		event := req.ToEvent()
+
+		// Set ID if not already set
+		if event.ID == uuid.Nil {
+			event.ID = uuid.New()
+		}
+
+		// Set timestamp to now if not provided
+		if event.Timestamp.IsZero() {
+			event.Timestamp = time.Now()
+		}
+
+		// Set created_at timestamp
+		event.CreatedAt = time.Now()
+
+		// Persist to repository
+		if err := s.repo.SaveBatch(ctx, []*domain.Event{event}); err != nil {
+			response.FailureCount++
+			response.Errors = append(response.Errors, dto.BatchError{
+				Index: i,
+				Error: fmt.Sprintf("failed to save event: %v", err),
+			})
+			eventsIngestFailedCounter.Inc()
+			continue
+		}
+
+		response.SuccessCount++
+		eventsIngestBatchCounter.Inc()
+	}
+
+	return response
 }

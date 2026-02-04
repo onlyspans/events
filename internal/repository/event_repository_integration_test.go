@@ -3,13 +3,13 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 	"github.com/onlyspans/events/internal/domain"
+	"github.com/onlyspans/events/internal/migrator"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -20,29 +20,12 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 
 	ctx := context.Background()
 
-	// Get absolute path to migrations directory
-	migrationsPath, err := filepath.Abs(filepath.Join("..", "..", "migrations"))
-	if err != nil {
-		t.Fatalf("failed to get migrations path: %v", err)
-	}
-
-	// Discover all .up.sql migration files
-	migrations, err := filepath.Glob(filepath.Join(migrationsPath, "*.up.sql"))
-	if err != nil {
-		t.Fatalf("failed to find migration files: %v", err)
-	}
-	if len(migrations) == 0 {
-		t.Fatalf("no migration files found in %s", migrationsPath)
-	}
-
-	// Start PostgreSQL container with migration scripts
-	// WithInitScripts executes scripts in alphabetical order
+	// Start PostgreSQL container
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:17-alpine",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
-		postgres.WithInitScripts(migrations...),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
@@ -56,6 +39,11 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		t.Fatalf("failed to get connection string: %v", err)
+	}
+
+	// Run embedded migrations using the migrator package
+	if err := migrator.Run(connStr); err != nil {
+		t.Fatalf("failed to run migrations: %v", err)
 	}
 
 	// Connect to database
@@ -73,6 +61,190 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	}
 
 	return db, cleanup
+}
+
+func TestEventRepository_Create(t *testing.T) {
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
+
+	repo := NewEventRepository(db)
+	ctx := context.Background()
+
+	tests := []struct {
+		name    string
+		event   *domain.Event
+		wantErr bool
+		verify  func(t *testing.T, db *sql.DB, id uuid.UUID)
+	}{
+		{
+			name: "create single event with required fields",
+			event: &domain.Event{
+				ID:        uuid.New(),
+				Timestamp: time.Now(),
+				User:      "test-user",
+				Category:  "test-category",
+				Action:    "test-action",
+			},
+			wantErr: false,
+			verify: func(t *testing.T, db *sql.DB, id uuid.UUID) {
+				var user, category, action string
+				err := db.QueryRowContext(ctx,
+					"SELECT user_name, category, action FROM events WHERE id = $1",
+					id).Scan(&user, &category, &action)
+				if err != nil {
+					t.Fatalf("failed to verify event: %v", err)
+				}
+				if user != "test-user" || category != "test-category" || action != "test-action" {
+					t.Errorf("event fields mismatch: got (%s, %s, %s)", user, category, action)
+				}
+			},
+		},
+		{
+			name: "create event with all fields",
+			event: &domain.Event{
+				ID:            uuid.New(),
+				Timestamp:     time.Now(),
+				User:          "user1",
+				Category:      "category1",
+				Action:        "action1",
+				DocumentName:  "doc1",
+				Project:       "project1",
+				Environment:   "production",
+				Tenant:        "tenant1",
+				CorrelationID: "corr-123",
+				TraceID:       "trace-456",
+			},
+			wantErr: false,
+			verify: func(t *testing.T, db *sql.DB, id uuid.UUID) {
+				var count int
+				err := db.QueryRowContext(ctx,
+					"SELECT COUNT(*) FROM events WHERE id = $1 AND project = $2 AND environment = $3",
+					id, "project1", "production").Scan(&count)
+				if err != nil {
+					t.Fatalf("failed to verify event: %v", err)
+				}
+				if count != 1 {
+					t.Error("event not found with expected fields")
+				}
+			},
+		},
+		{
+			name: "create event with JSONB details",
+			event: &domain.Event{
+				ID:        uuid.New(),
+				Timestamp: time.Now(),
+				User:      "test-user",
+				Category:  "test-category",
+				Action:    "test-action",
+				Details: &domain.EventDetails{
+					IPAddress: "192.168.1.1",
+					UserAgent: "Test Agent/1.0",
+					AdditionalInfo: "Additional test info",
+					Changes: []domain.Change{
+						{Field: "status", OldValue: "active", NewValue: "inactive"},
+						{Field: "name", OldValue: "old", NewValue: "new"},
+					},
+				},
+			},
+			wantErr: false,
+			verify: func(t *testing.T, db *sql.DB, id uuid.UUID) {
+				var detailsJSON []byte
+				err := db.QueryRowContext(ctx,
+					"SELECT details FROM events WHERE id = $1",
+					id).Scan(&detailsJSON)
+				if err != nil {
+					t.Fatalf("failed to verify event details: %v", err)
+				}
+				if len(detailsJSON) == 0 {
+					t.Error("details field is empty")
+				}
+
+				// Verify JSONB can be queried
+				var ipAddress string
+				err = db.QueryRowContext(ctx,
+					"SELECT details->>'ipAddress' FROM events WHERE id = $1",
+					id).Scan(&ipAddress)
+				if err != nil {
+					t.Fatalf("failed to query JSONB field: %v", err)
+				}
+				if ipAddress != "192.168.1.1" {
+					t.Errorf("expected IP '192.168.1.1', got '%s'", ipAddress)
+				}
+			},
+		},
+		{
+			name: "create event with nil details",
+			event: &domain.Event{
+				ID:        uuid.New(),
+				Timestamp: time.Now(),
+				User:      "test-user",
+				Category:  "test-category",
+				Action:    "test-action",
+				Details:   nil,
+			},
+			wantErr: false,
+			verify: func(t *testing.T, db *sql.DB, id uuid.UUID) {
+				var details sql.NullString
+				err := db.QueryRowContext(ctx,
+					"SELECT details FROM events WHERE id = $1",
+					id).Scan(&details)
+				if err != nil {
+					t.Fatalf("failed to verify event: %v", err)
+				}
+				if details.Valid {
+					t.Error("expected NULL details, got non-NULL value")
+				}
+			},
+		},
+		{
+			name: "create event with optional fields empty",
+			event: &domain.Event{
+				ID:          uuid.New(),
+				Timestamp:   time.Now(),
+				User:        "test-user",
+				Category:    "test-category",
+				Action:      "test-action",
+				Project:     "", // Empty optional field
+				Environment: "", // Empty optional field
+			},
+			wantErr: false,
+			verify: func(t *testing.T, db *sql.DB, id uuid.UUID) {
+				var project, environment sql.NullString
+				err := db.QueryRowContext(ctx,
+					"SELECT project, environment FROM events WHERE id = $1",
+					id).Scan(&project, &environment)
+				if err != nil {
+					t.Fatalf("failed to verify event: %v", err)
+				}
+				if project.Valid || environment.Valid {
+					t.Error("expected NULL for empty optional fields")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id, err := repo.Create(ctx, tt.event)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Create() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if !tt.wantErr {
+				if id == uuid.Nil {
+					t.Error("Create() returned nil UUID")
+				}
+				if id != tt.event.ID {
+					t.Errorf("Create() returned ID %s, expected %s", id, tt.event.ID)
+				}
+
+				if tt.verify != nil {
+					tt.verify(t, db, id)
+				}
+			}
+		})
+	}
 }
 
 func TestEventRepository_SaveBatch(t *testing.T) {

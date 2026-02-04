@@ -71,7 +71,7 @@ func NewKafkaConsumer(cfg *config.KafkaConfig, eventService *service.EventServic
 		}
 	}
 
-	brokers := []string{cfg.BrokerAddress()}
+	brokers := cfg.GetBrokers()
 	consumer, err := sarama.NewConsumerGroup(brokers, cfg.GroupID, saramaConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create consumer group: %w", err)

@@ -16,35 +16,45 @@ This is a Go microservice that manages domain events for dev-platform. It consum
 
 ## Architecture
 
-### Two-Binary System
+### Unified Binary System
 
-The service consists of two separate binaries:
+The service consists of a single binary (`cmd/events/main.go`) that combines all functionality:
 
-1. **HTTP Service** (`cmd/service/main.go`): REST API server that handles event searches, exports, settings management, health checks, and metrics. Runs on port 8080 by default.
+1. **HTTP API Server**: REST API endpoints for event ingestion, searches, exports, settings management, health checks, and metrics. Runs on port 8080 by default.
 
-2. **Kafka Worker** (`cmd/worker/main.go`): Background consumer that reads events from Kafka and persists them to PostgreSQL. Uses batch processing (100 events or 500ms timeout) for efficiency.
+2. **Kafka Consumer (Optional)**: Background consumer that reads events from Kafka and persists them to PostgreSQL. Enabled via `KAFKA_ENABLED=true`. Uses batch processing (100 events or 500ms timeout) for efficiency.
+
+3. **Embedded Migrations**: Database migrations are embedded in the binary and run automatically on startup when `AUTO_MIGRATE=true` (default). No separate migration container needed.
+
+**Deployment Modes:**
+- **Minimal (Default)**: HTTP API only with direct event ingestion endpoints. Requires only PostgreSQL.
+- **Full (Kafka-enabled)**: HTTP API + Kafka consumer. Requires PostgreSQL and Kafka infrastructure.
 
 ### Layer Structure
 
 ```
-cmd/          - Entry points (service and worker binaries)
+cmd/
+  └── events/      - Unified binary entry point (HTTP API + optional Kafka consumer)
 internal/
   ├── config/      - Configuration loading from environment variables/.env
   ├── consumer/    - Kafka consumer with SASL/SCRAM authentication support
   ├── domain/      - Core entities (Event, Settings) with JSONB mapping
   ├── dto/         - Data transfer objects for API requests/responses
-  ├── handler/     - HTTP handlers (events, settings, health)
+  ├── handler/     - HTTP handlers (events, settings, health, ingestion)
+  ├── migrator/    - Embedded migration runner using golang-migrate (migrations are .sql files in this directory)
   ├── repository/  - Database access layer (PostgreSQL)
   └── service/     - Business logic including retention service with cron
-migrations/   - Database schema migrations (golang-migrate format)
 ```
 
 ### Key Design Patterns
 
+- **Embedded Migrations**: Database migrations are embedded in the binary using `//go:embed` and run automatically on startup. PostgreSQL advisory locks prevent concurrent migration execution.
+- **Optional Kafka Support**: Kafka consumer is conditionally started based on `KAFKA_ENABLED` flag, allowing for simplified deployments without messaging infrastructure.
+- **HTTP Event Ingestion**: Events can be ingested directly via HTTP endpoints (`POST /events/ingest`, `POST /events/ingest/batch`) as an alternative to Kafka.
 - **Manual Offset Management**: The Kafka consumer manually commits offsets after successful batch processing to ensure at-least-once delivery semantics.
 - **Batch Processing**: Events are processed in batches of 100 or every 500ms to optimize database writes and Kafka commits.
 - **JSONB Details**: The `details` field uses PostgreSQL JSONB with a GIN index for flexible querying of nested data.
-- **Graceful Shutdown**: Both binaries handle SIGINT/SIGTERM with context cancellation and 30-second timeouts.
+- **Graceful Shutdown**: The binary handles SIGINT/SIGTERM with context cancellation and 30-second timeouts for all goroutines.
 - **Connection Pooling**: Database connections configured with max 25 open, 5 idle, 5-minute lifetime.
 
 ## Development Commands
@@ -52,23 +62,29 @@ migrations/   - Database schema migrations (golang-migrate format)
 ### Building
 
 ```bash
-make build              # Build both service and worker
-make build-service      # Build service only
-make build-worker       # Build worker only
+make build              # Build unified events binary
 ```
 
-### Running Locally (Requires PostgreSQL and Kafka Running)
+### Running Locally
 
+**Minimal Mode (HTTP API only, requires PostgreSQL only):**
 ```bash
-# Start dependencies first
+# Start PostgreSQL
+docker compose up postgres -d
+
+# Run the service (migrations run automatically)
+KAFKA_ENABLED=false make run
+# Or simply:
+make run                # KAFKA_ENABLED defaults to false
+```
+
+**Full Mode (HTTP API + Kafka consumer):**
+```bash
+# Start dependencies
 docker compose up postgres kafka -d
 
-# Run migrations
-make migrate-up
-
-# Run binaries (in separate terminals)
-make run-service        # Starts HTTP API on :8080
-make run-worker         # Starts Kafka consumer
+# Run the service with Kafka enabled
+KAFKA_ENABLED=true make run
 ```
 
 ### Testing
@@ -79,16 +95,34 @@ make test               # Run all tests with race detector
 
 ### Database Migrations
 
+**Automatic Migrations (Default)**
+Migrations are embedded in the binary and run automatically on startup when `AUTO_MIGRATE=true` (default).
+
 ```bash
-make migrate-up         # Apply all migrations
-make migrate-down       # Rollback all migrations
+# Migrations run automatically when starting the service
+make run        # Runs migrations, then starts HTTP API
+
+# To disable automatic migrations
+AUTO_MIGRATE=false make run
 ```
 
 ### Docker
 
 ```bash
-docker compose up       # Start all services (postgres, kafka, migrations, service, worker)
-make docker-build       # Build Docker image locally
+# Minimal deployment (2 containers: postgres + events)
+docker compose up       # Starts PostgreSQL and events service
+                        # Migrations run automatically on startup (embedded in binary)
+                        # Kafka is NOT started by default (KAFKA_ENABLED=false)
+
+# Full deployment with Kafka (4 containers: postgres + events + zookeeper + kafka)
+# Option 1: Using compose override (recommended - automatically sets KAFKA_ENABLED=true)
+docker compose -f compose.yaml -f compose.kafka.yaml up
+
+# Option 2: Using profiles (requires KAFKA_ENABLED=true in .env)
+docker compose --profile kafka up
+
+# Build Docker image
+make docker-build       # Build Docker image locally (builds events:latest)
 ```
 
 ## Configuration
@@ -96,11 +130,15 @@ make docker-build       # Build Docker image locally
 All configuration is via environment variables with defaults in `internal/config/config.go`. A `.env` file is auto-loaded if present.
 
 **Critical Configuration:**
-- Database connection: `POSTGRES_*` variables
-- Kafka broker: `KAFKA_HOST`, `KAFKA_PORT`, `KAFKA_TOPIC`
-- Kafka authentication: `KAFKA_USERNAME`, `KAFKA_PASSWORD` (optional, enables SASL/SCRAM-SHA-512)
-- Event retention: `RETENTION_PERIOD_DAYS` (default: 90), `RETENTION_CRON` (default: "0 2 * * *")
-- Export limits: `MAX_EXPORT_SIZE` (default: 10000)
+- **Feature Flags:**
+  - `KAFKA_ENABLED` (default: false) - Enable Kafka consumer
+  - `AUTO_MIGRATE` (default: true) - Run migrations automatically on startup
+- **Database connection:** `POSTGRES_*` variables
+- **Kafka configuration** (only used if `KAFKA_ENABLED=true`):
+  - `KAFKA_HOST`, `KAFKA_PORT`, `KAFKA_TOPIC`
+  - `KAFKA_USERNAME`, `KAFKA_PASSWORD` (optional, enables SASL/SCRAM-SHA-512)
+- **Event retention:** `RETENTION_PERIOD_DAYS` (default: 90), `RETENTION_CRON` (default: "0 2 * * *")
+- **Export limits:** `MAX_EXPORT_SIZE` (default: 10000)
 
 ## Database Schema
 
@@ -120,22 +158,35 @@ Single-row table for runtime configuration:
 
 ## API Endpoints
 
+**Event Ingestion:**
+- `POST /events/ingest` - Ingest single event directly via HTTP
+- `POST /events/ingest/batch` - Ingest multiple events in batch (max 100, returns 207 Multi-Status)
+
+**Event Management:**
 - `POST /events` - Search events with pagination and filters
 - `POST /events/export` - Export events to CSV (streams response)
+
+**Settings:**
 - `GET /settings` - Get current retention and export settings
 - `PUT /settings` - Update retention and export settings
+
+**Health & Metrics:**
 - `GET /healthz` - Liveness probe (always returns 200)
 - `GET /readyz` - Readiness probe (checks database connectivity)
 - `GET /metrics` - Prometheus metrics
 
-## Kafka Consumer Behavior
+## Kafka Consumer Behavior (Optional)
 
-- Consumes from topic specified in `KAFKA_TOPIC` (default: "event-logs")
-- Consumer group: `KAFKA_GROUP_ID` (default: "event-logs-group")
+The Kafka consumer is only active when `KAFKA_ENABLED=true`. When enabled:
+
+- Consumes from topic specified in `KAFKA_TOPIC` (default: "events")
+- Consumer group: `KAFKA_GROUP_ID` (default: "events-group")
 - Batches up to 100 messages or 500ms timeout
 - Manual offset commits only after successful batch persistence
 - Failed messages are logged and skipped (offset still committed to avoid blocking)
 - Prometheus metrics track received, processed, and failed event counts
+
+**Alternative to Kafka:** Use HTTP ingestion endpoints (`POST /events/ingest`, `POST /events/ingest/batch`) for direct event submission without Kafka infrastructure.
 
 ## Retention Service
 
@@ -151,7 +202,7 @@ The retention service runs as a cron job within the service binary:
 
 1. Update `domain.Event` struct in `internal/domain/event.go`
 2. Update `dto.EventDTO` in `internal/dto/event.go` if exposed in API
-3. Create migration in `migrations/` to add column and index if needed
+3. Create migration in `internal/migrator/` to add column and index if needed (e.g., `000003_add_new_field.up.sql` and `000003_add_new_field.down.sql`)
 4. Update repository queries in `internal/repository/event_repository.go`
 
 ### Modifying Search Filters
@@ -174,7 +225,7 @@ The project uses a two-tier testing approach:
 ### Integration Tests (`internal/repository/*_integration_test.go`)
 - Use **testcontainers-go** to spin up real PostgreSQL containers
 - Test database queries, indexes, and JSONB operations
-- Migrations loaded via `postgres.WithInitScripts()` - uses actual migration files from `migrations/` directory
+- Migrations loaded via `internal/migrator` package - uses embedded migration files
 - Containers are automatically created and destroyed per test
 - Requires Docker daemon running locally
 
@@ -198,12 +249,11 @@ make test
 - Uses actual migration files (single source of truth)
 
 **How migrations work in tests:**
-- Migration files are auto-discovered using `filepath.Glob("*.up.sql")`
-- All `.up.sql` files from `migrations/` directory are automatically loaded
+- Migrations are embedded in the `internal/migrator` package via `//go:embed *.sql`
+- All `.up.sql` and `.down.sql` files are embedded at compile time
 - Files execute in alphabetical order (works because migrations are prefixed: 000001, 000002, etc.)
-- Adding new migrations requires zero test code changes
-- Migrations run before container is marked "ready"
-- No duplication of SQL - tests use the same files as production
+- Adding new migrations requires zero test code changes - just add new .sql files to `internal/migrator/`
+- Migrations use the same embedded files in both tests and production
 
 ## CI/CD
 
