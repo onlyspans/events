@@ -1,7 +1,11 @@
 package dto
 
 import (
+	"fmt"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/onlyspans/events/internal/domain"
 )
 
 // EventDTO represents the data transfer object for events.
@@ -78,4 +82,111 @@ type QueryResult struct {
 	Page       int        `json:"page"`
 	Size       int        `json:"size"`
 	TotalPages int        `json:"totalPages"`
+}
+
+// EventIngestRequest represents a request to ingest a single event via HTTP.
+type EventIngestRequest struct {
+	Timestamp     time.Time              `json:"timestamp"`
+	UserName      string                 `json:"user_name"`
+	Category      string                 `json:"category"`
+	Action        string                 `json:"action"`
+	DocumentName  string                 `json:"document_name,omitempty"`
+	Project       string                 `json:"project,omitempty"`
+	Environment   string                 `json:"environment,omitempty"`
+	Tenant        string                 `json:"tenant,omitempty"`
+	Details       map[string]interface{} `json:"details,omitempty"`
+	CorrelationID string                 `json:"correlation_id,omitempty"`
+	TraceID       string                 `json:"trace_id,omitempty"`
+}
+
+// Validate checks that all required fields are present and non-empty.
+func (e *EventIngestRequest) Validate() error {
+	if e.UserName == "" {
+		return fmt.Errorf("missing required field: user_name")
+	}
+	if e.Category == "" {
+		return fmt.Errorf("missing required field: category")
+	}
+	if e.Action == "" {
+		return fmt.Errorf("missing required field: action")
+	}
+	return nil
+}
+
+// ToEvent converts the EventIngestRequest to a domain.Event.
+// The ID and CreatedAt fields will be set by the service layer.
+// If Timestamp is zero, it will be set to time.Now() by the service layer.
+func (e *EventIngestRequest) ToEvent() *domain.Event {
+	var details *domain.EventDetails
+	if len(e.Details) > 0 {
+		// Convert map[string]interface{} to EventDetails
+		// For now, we store the raw details as AdditionalInfo
+		// The service layer can further process if needed
+		details = &domain.EventDetails{}
+
+		// Try to extract known fields
+		if changes, ok := e.Details["changes"].([]interface{}); ok {
+			for _, change := range changes {
+				if changeMap, ok := change.(map[string]interface{}); ok {
+					c := domain.Change{}
+					if field, ok := changeMap["field"].(string); ok {
+						c.Field = field
+					}
+					if oldValue, ok := changeMap["oldValue"].(string); ok {
+						c.OldValue = oldValue
+					}
+					if newValue, ok := changeMap["newValue"].(string); ok {
+						c.NewValue = newValue
+					}
+					details.Changes = append(details.Changes, c)
+				}
+			}
+		}
+		if ipAddress, ok := e.Details["ipAddress"].(string); ok {
+			details.IPAddress = ipAddress
+		}
+		if userAgent, ok := e.Details["userAgent"].(string); ok {
+			details.UserAgent = userAgent
+		}
+		if additionalInfo, ok := e.Details["additionalInfo"].(string); ok {
+			details.AdditionalInfo = additionalInfo
+		}
+	}
+
+	return &domain.Event{
+		Timestamp:     e.Timestamp,
+		User:          e.UserName,
+		Category:      e.Category,
+		Action:        e.Action,
+		DocumentName:  e.DocumentName,
+		Project:       e.Project,
+		Environment:   e.Environment,
+		Tenant:        e.Tenant,
+		Details:       details,
+		CorrelationID: e.CorrelationID,
+		TraceID:       e.TraceID,
+	}
+}
+
+// BatchIngestRequest represents a request to ingest multiple events via HTTP.
+type BatchIngestRequest struct {
+	Events []EventIngestRequest `json:"events"`
+}
+
+// BatchIngestResponse represents the response for a batch ingestion request.
+type BatchIngestResponse struct {
+	SuccessCount int          `json:"success_count"`
+	FailureCount int          `json:"failure_count"`
+	Errors       []BatchError `json:"errors,omitempty"`
+}
+
+// BatchError represents an error that occurred during batch ingestion.
+type BatchError struct {
+	Index int    `json:"index"`
+	Error string `json:"error"`
+}
+
+// SingleIngestResponse represents the response for a single event ingestion.
+type SingleIngestResponse struct {
+	ID uuid.UUID `json:"id"`
 }

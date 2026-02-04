@@ -148,7 +148,8 @@ kill -SIGTERM <pid>
 
 ---
 
-### [ ] Phase 1 - Task 3: Implement Event Ingestion DTOs
+### [x] Phase 1 - Task 3: Implement Event Ingestion DTOs
+<!-- chat-id: bbb6ee23-f021-42ff-b688-09608ea2db5b -->
 
 **Goal**: Create data transfer objects for HTTP event ingestion with validation.
 
@@ -176,11 +177,11 @@ go test ./internal/dto/... -run TestEventIngestRequest_Validate -v
 ```
 
 **Acceptance Criteria**:
-- [ ] `EventIngestRequest` validates required fields correctly
-- [ ] `ToEvent()` conversion handles optional fields and JSONB details
-- [ ] `BatchIngestRequest` and `BatchIngestResponse` structs defined
-- [ ] Unit tests cover valid input, missing fields, and edge cases
-- [ ] JSON marshaling/unmarshaling works correctly
+- [x] `EventIngestRequest` validates required fields correctly
+- [x] `ToEvent()` conversion handles optional fields and JSONB details
+- [x] `BatchIngestRequest` and `BatchIngestResponse` structs defined
+- [x] Unit tests cover valid input, missing fields, and edge cases
+- [x] JSON marshaling/unmarshaling works correctly
 
 ---
 
