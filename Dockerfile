@@ -12,7 +12,6 @@ RUN go mod download
 # Copy source code
 COPY cmd/ cmd/
 COPY internal/ internal/
-COPY migrations/ migrations/
 
 # Build unified binary
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o events ./cmd/events

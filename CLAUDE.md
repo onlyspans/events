@@ -41,10 +41,9 @@ internal/
   ├── domain/      - Core entities (Event, Settings) with JSONB mapping
   ├── dto/         - Data transfer objects for API requests/responses
   ├── handler/     - HTTP handlers (events, settings, health, ingestion)
-  ├── migrator/    - Embedded migration runner using golang-migrate
+  ├── migrator/    - Embedded migration runner using golang-migrate (migrations are .sql files in this directory)
   ├── repository/  - Database access layer (PostgreSQL)
   └── service/     - Business logic including retention service with cron
-migrations/   - Database schema migrations (embedded in binary via go:embed)
 ```
 
 ### Key Design Patterns
@@ -101,18 +100,10 @@ Migrations are embedded in the binary and run automatically on startup when `AUT
 
 ```bash
 # Migrations run automatically when starting the service
-make run-service        # Runs migrations, then starts HTTP API
+make run        # Runs migrations, then starts HTTP API
 
 # To disable automatic migrations
-AUTO_MIGRATE=false make run-service
-```
-
-**Manual Migrations (Optional)**
-For development or manual control, use the migrate CLI tool:
-
-```bash
-make migrate-up         # Apply all migrations
-make migrate-down       # Rollback all migrations
+AUTO_MIGRATE=false make run
 ```
 
 ### Docker
@@ -211,7 +202,7 @@ The retention service runs as a cron job within the service binary:
 
 1. Update `domain.Event` struct in `internal/domain/event.go`
 2. Update `dto.EventDTO` in `internal/dto/event.go` if exposed in API
-3. Create migration in `migrations/` to add column and index if needed
+3. Create migration in `internal/migrator/` to add column and index if needed (e.g., `000003_add_new_field.up.sql` and `000003_add_new_field.down.sql`)
 4. Update repository queries in `internal/repository/event_repository.go`
 
 ### Modifying Search Filters
@@ -234,7 +225,7 @@ The project uses a two-tier testing approach:
 ### Integration Tests (`internal/repository/*_integration_test.go`)
 - Use **testcontainers-go** to spin up real PostgreSQL containers
 - Test database queries, indexes, and JSONB operations
-- Migrations loaded via `postgres.WithInitScripts()` - uses actual migration files from `migrations/` directory
+- Migrations loaded via `internal/migrator` package - uses embedded migration files
 - Containers are automatically created and destroyed per test
 - Requires Docker daemon running locally
 
@@ -258,12 +249,11 @@ make test
 - Uses actual migration files (single source of truth)
 
 **How migrations work in tests:**
-- Migration files are auto-discovered using `filepath.Glob("*.up.sql")`
-- All `.up.sql` files from `migrations/` directory are automatically loaded
+- Migrations are embedded in the `internal/migrator` package via `//go:embed *.sql`
+- All `.up.sql` and `.down.sql` files are embedded at compile time
 - Files execute in alphabetical order (works because migrations are prefixed: 000001, 000002, etc.)
-- Adding new migrations requires zero test code changes
-- Migrations run before container is marked "ready"
-- No duplication of SQL - tests use the same files as production
+- Adding new migrations requires zero test code changes - just add new .sql files to `internal/migrator/`
+- Migrations use the same embedded files in both tests and production
 
 ## CI/CD
 

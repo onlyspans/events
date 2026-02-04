@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/onlyspans/events/internal/dto"
+	"github.com/onlyspans/events/internal/migrator"
 	"github.com/onlyspans/events/internal/repository"
 	"github.com/onlyspans/events/internal/service"
 	"github.com/testcontainers/testcontainers-go"
@@ -27,28 +27,12 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 
 	ctx := context.Background()
 
-	// Get absolute path to migrations directory
-	migrationsPath, err := filepath.Abs(filepath.Join("..", "..", "migrations"))
-	if err != nil {
-		t.Fatalf("failed to get migrations path: %v", err)
-	}
-
-	// Discover all .up.sql migration files
-	migrations, err := filepath.Glob(filepath.Join(migrationsPath, "*.up.sql"))
-	if err != nil {
-		t.Fatalf("failed to find migration files: %v", err)
-	}
-	if len(migrations) == 0 {
-		t.Fatalf("no migration files found in %s", migrationsPath)
-	}
-
-	// Start PostgreSQL container with migration scripts
+	// Start PostgreSQL container
 	pgContainer, err := postgres.Run(ctx,
 		"postgres:17-alpine",
 		postgres.WithDatabase("testdb"),
 		postgres.WithUsername("testuser"),
 		postgres.WithPassword("testpass"),
-		postgres.WithInitScripts(migrations...),
 		testcontainers.WithWaitStrategy(
 			wait.ForLog("database system is ready to accept connections").
 				WithOccurrence(2).
@@ -62,6 +46,11 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
 	if err != nil {
 		t.Fatalf("failed to get connection string: %v", err)
+	}
+
+	// Run embedded migrations using the migrator package
+	if err := migrator.Run(connStr); err != nil {
+		t.Fatalf("failed to run migrations: %v", err)
 	}
 
 	// Connect to database
