@@ -100,3 +100,88 @@ func (h *EventHandler) ExportEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 }
+
+// IngestEvent handles POST /events/ingest requests for single event ingestion.
+func (h *EventHandler) IngestEvent(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req dto.EventIngestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Error("failed to decode ingest request", "error", err)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	h.logger.Debug("ingest event request", "user", req.UserName, "category", req.Category, "action", req.Action)
+
+	// Add context timeout for single event ingestion (5 seconds)
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
+	eventID, err := h.eventService.CreateEvent(ctx, req)
+	if err != nil {
+		h.logger.Error("failed to create event", "error", err)
+		http.Error(w, fmt.Sprintf("Failed to create event: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.Info("event created successfully", "id", eventID)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(dto.SingleIngestResponse{ID: eventID}); err != nil {
+		h.logger.Error("failed to encode response", "error", err)
+	}
+}
+
+// IngestEventsBatch handles POST /events/ingest/batch requests for batch event ingestion.
+func (h *EventHandler) IngestEventsBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req dto.BatchIngestRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.logger.Error("failed to decode batch ingest request", "error", err)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Enforce batch size limit (max 100 events)
+	const maxBatchSize = 100
+	if len(req.Events) > maxBatchSize {
+		h.logger.Warn("batch size exceeds maximum", "requested", len(req.Events), "max", maxBatchSize)
+		http.Error(w, fmt.Sprintf("Batch size too large (max %d)", maxBatchSize), http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Events) == 0 {
+		h.logger.Warn("empty batch request")
+		http.Error(w, "Batch must contain at least one event", http.StatusBadRequest)
+		return
+	}
+
+	h.logger.Debug("batch ingest request", "count", len(req.Events))
+
+	// Add context timeout for batch ingestion (30 seconds)
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	response := h.eventService.CreateEventsBatch(ctx, req.Events)
+
+	h.logger.Info("batch processing completed",
+		"success", response.SuccessCount,
+		"failed", response.FailureCount,
+		"total", len(req.Events))
+
+	// Return 207 Multi-Status for partial success scenarios
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusMultiStatus)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		h.logger.Error("failed to encode batch response", "error", err)
+	}
+}

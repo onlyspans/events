@@ -96,6 +96,8 @@ func main() {
 	// Event routes
 	mux.HandleFunc("/events", eventHandler.SearchEvents)
 	mux.HandleFunc("/events/export", eventHandler.ExportEvents)
+	mux.HandleFunc("/events/ingest", eventHandler.IngestEvent)
+	mux.HandleFunc("/events/ingest/batch", eventHandler.IngestEventsBatch)
 
 	// Settings routes
 	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
