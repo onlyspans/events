@@ -274,7 +274,8 @@ curl -X POST http://localhost:8080/events/ingest/batch \
 
 ---
 
-### [ ] Phase 1 - Task 6: Add Repository Create Method
+### [x] Phase 1 - Task 6: Add Repository Create Method
+<!-- chat-id: fa64f148-86c8-4b26-8fd9-a2916c48e8dc -->
 
 **Goal**: Ensure repository supports creating events from HTTP ingestion (may already exist).
 
@@ -301,10 +302,10 @@ go test ./internal/repository/... -run TestCreate -v
 ```
 
 **Acceptance Criteria**:
-- [ ] `Create()` method successfully inserts events
-- [ ] JSONB details field is stored and retrievable
-- [ ] Integration tests verify database persistence
-- [ ] Method handles NULL optional fields correctly
+- [x] `Create()` method successfully inserts events
+- [x] JSONB details field is stored and retrievable
+- [x] Integration tests verify database persistence
+- [x] Method handles NULL optional fields correctly
 
 ---
 
