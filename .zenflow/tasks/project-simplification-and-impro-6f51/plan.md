@@ -19,7 +19,7 @@ Create a Product Requirements Document (PRD) based on the feature description.
 
 Save the PRD to `{@artifacts_path}/requirements.md`.
 
-### [ ] Step: Technical Specification
+### [x] Step: Technical Specification
 
 Create a technical specification based on the PRD in `{@artifacts_path}/requirements.md`.
 
@@ -33,6 +33,19 @@ Save to `{@artifacts_path}/spec.md` with:
 - Data model / API / interface changes
 - Delivery phases (incremental, testable milestones)
 - Verification approach using project lint/test commands
+
+**Status**: ✅ Complete. Created comprehensive technical specification at `.zenflow/tasks/project-simplification-and-impro-6f51/spec.md` covering:
+- Current architecture analysis (2 binaries, 6 containers, Kafka+Zookeeper)
+- Unified single-binary design with optional Kafka support
+- 4 delivery phases (P0-P2 priorities)
+- New HTTP ingestion endpoints (`POST /events/ingest`, `/events/ingest/batch`)
+- Embedded migration runner using golang-migrate library
+- Configuration simplification (25+ vars → 5-10 vars)
+- Docker Compose profiles (default minimal, kafka full)
+- Detailed implementation approach for each component
+- Testing strategy (unit, integration, e2e)
+- Risk mitigation (migration conflicts, performance, backward compatibility)
+- Success metrics and rollout plan
 
 ### [ ] Step: Planning
 
