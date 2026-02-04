@@ -67,7 +67,7 @@ clean:
 
 docker-build:
 	@echo "Building Docker image..."
-	docker build -t events-service:latest .
+	docker build -t events:latest .
 
 migrate-up:
 	@echo "Running migrations up..."

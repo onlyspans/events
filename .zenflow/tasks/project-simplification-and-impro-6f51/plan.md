@@ -309,7 +309,8 @@ go test ./internal/repository/... -run TestCreate -v
 
 ---
 
-### [ ] Phase 1 - Task 7: Update Build and Deployment Configuration
+### [x] Phase 1 - Task 7: Update Build and Deployment Configuration
+<!-- chat-id: 90fc140e-d4e6-48dd-8c5f-7489e087a53c -->
 
 **Goal**: Update Makefile, Dockerfile, and docker-compose.yaml for unified binary.
 
@@ -353,11 +354,20 @@ KAFKA_ENABLED=true docker compose up -d
 ```
 
 **Acceptance Criteria**:
-- [ ] Makefile builds single binary successfully
-- [ ] Dockerfile builds single image
-- [ ] docker-compose.yaml works with unified service
-- [ ] Default deployment runs without Kafka (2 containers: postgres, events)
-- [ ] Can enable Kafka by setting environment variable
+- [x] Makefile builds single binary successfully
+- [x] Dockerfile builds single image
+- [x] docker-compose.yaml works with unified service
+- [x] Default deployment runs without Kafka (2 containers: postgres, events)
+- [x] Can enable Kafka by setting environment variable
+
+**Status**: ✅ Complete. Updated all build and deployment configurations:
+- Dockerfile now builds single unified binary from `cmd/events`
+- compose.yaml replaced separate service/worker with unified `events` service
+- Default configuration uses 2 containers (postgres + events) with `KAFKA_ENABLED=false`
+- Kafka/Zookeeper services remain available but not started by default
+- Makefile docker-build target updated to use `events:latest` image name
+- Created test-deployment.sh script for verification
+- Full summary documented in task7-summary.md
 
 ---
 

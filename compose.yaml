@@ -15,19 +15,44 @@ services:
       timeout: 5s
       retries: 5
 
-  migrate:
-    image: migrate/migrate:v4.17.0
-    command:
-      - "-path=/migrations"
-      - "-database=postgres://${POSTGRES_USER:-events}:${POSTGRES_PASSWORD:-events}@postgres:5432/${POSTGRES_DB:-events}?sslmode=disable"
-      - "up"
-    volumes:
-      - ./migrations:/migrations
+  events:
+    build: .
+    ports:
+      - '8080:8080'
+    environment:
+      # Database configuration
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=${POSTGRES_DB:-events}
+      - POSTGRES_USER=${POSTGRES_USER:-events}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-events}
+
+      # Feature flags (Kafka disabled by default)
+      - KAFKA_ENABLED=${KAFKA_ENABLED:-false}
+      - AUTO_MIGRATE=${AUTO_MIGRATE:-true}
+
+      # Kafka configuration (only used if KAFKA_ENABLED=true)
+      - KAFKA_HOST=${KAFKA_HOST:-kafka}
+      - KAFKA_PORT=${KAFKA_PORT:-29092}
+      - KAFKA_TOPIC=${KAFKA_TOPIC:-event-logs}
+      - KAFKA_GROUP_ID=${KAFKA_GROUP_ID:-event-logs-group}
+
+      # Server configuration
+      - SERVER_PORT=8080
+      - RETENTION_PERIOD_DAYS=${RETENTION_PERIOD_DAYS:-90}
+      - RETENTION_CRON=${RETENTION_CRON:-0 2 * * *}
+      - MAX_EXPORT_SIZE=${MAX_EXPORT_SIZE:-10000}
     depends_on:
       postgres:
         condition: service_healthy
-    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
+  # Kafka infrastructure (optional - enable by setting KAFKA_ENABLED=true)
   zookeeper:
     image: 'confluentinc/cp-zookeeper:7.5.0'
     environment:
