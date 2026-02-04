@@ -11,6 +11,37 @@ import (
 )
 
 // Config holds all application configuration.
+//
+// Environment Variables (Required vs Optional):
+//
+// Required:
+//   - POSTGRES_PASSWORD: Database password (no default for security)
+//
+// Optional (with defaults):
+//   - SERVER_PORT (default: 8080)
+//   - POSTGRES_HOST (default: localhost)
+//   - POSTGRES_PORT (default: 5432)
+//   - POSTGRES_USER (default: postgres)
+//   - POSTGRES_DB (default: events)
+//   - POSTGRES_SSLMODE (default: disable)
+//   - KAFKA_ENABLED (default: false)
+//   - AUTO_MIGRATE (default: true)
+//   - RETENTION_PERIOD_DAYS (default: 90)
+//   - MAX_EXPORT_SIZE (default: 10000)
+//   - RETENTION_CRON (default: "0 2 * * *")
+//
+// Optional (Kafka-only, used when KAFKA_ENABLED=true):
+//   - KAFKA_HOST (default: localhost)
+//   - KAFKA_PORT (default: 9092)
+//   - KAFKA_TOPIC (default: event-logs)
+//   - KAFKA_GROUP_ID (default: event-logs-group)
+//   - KAFKA_USERNAME (optional, enables SASL/SCRAM)
+//   - KAFKA_PASSWORD (optional, enables SASL/SCRAM)
+//   - KAFKA_MAX_POLL_RECORDS (default: 100)
+//   - KAFKA_FETCH_MIN_BYTES (default: 1)
+//   - KAFKA_FETCH_MAX_WAIT_MS (default: 500)
+//   - KAFKA_SESSION_TIMEOUT_MS (default: 30000)
+//   - KAFKA_HEARTBEAT_INTERVAL_MS (default: 10000)
 type Config struct {
 	Server   ServerConfig
 	Database DatabaseConfig
@@ -79,8 +110,8 @@ func Load() (*Config, error) {
 		Database: DatabaseConfig{
 			Host:     getEnv("POSTGRES_HOST", "localhost"),
 			Port:     getEnv("POSTGRES_PORT", "5432"),
-			User:     getEnv("POSTGRES_USER", "events"),
-			Password: getEnv("POSTGRES_PASSWORD", "events"),
+			User:     getEnv("POSTGRES_USER", "postgres"),
+			Password: getEnv("POSTGRES_PASSWORD", ""), // Required: no default for security
 			DBName:   getEnv("POSTGRES_DB", "events"),
 			SSLMode:  getEnv("POSTGRES_SSLMODE", "disable"),
 		},

@@ -193,3 +193,103 @@ func TestGetEnvAsBool(t *testing.T) {
 		})
 	}
 }
+
+func TestLoad_MinimalConfiguration(t *testing.T) {
+	// Clear all environment variables to test minimal config
+	envVars := []string{
+		"SERVER_PORT",
+		"POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB", "POSTGRES_SSLMODE",
+		"KAFKA_ENABLED", "KAFKA_HOST", "KAFKA_PORT", "KAFKA_TOPIC", "KAFKA_GROUP_ID",
+		"RETENTION_PERIOD_DAYS", "MAX_EXPORT_SIZE", "RETENTION_CRON",
+		"AUTO_MIGRATE",
+	}
+	for _, v := range envVars {
+		os.Unsetenv(v)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	// Verify defaults
+	if cfg.Server.Port != "8080" {
+		t.Errorf("expected default SERVER_PORT=8080, got %s", cfg.Server.Port)
+	}
+	if cfg.Database.Host != "localhost" {
+		t.Errorf("expected default POSTGRES_HOST=localhost, got %s", cfg.Database.Host)
+	}
+	if cfg.Database.Port != "5432" {
+		t.Errorf("expected default POSTGRES_PORT=5432, got %s", cfg.Database.Port)
+	}
+	if cfg.Database.User != "postgres" {
+		t.Errorf("expected default POSTGRES_USER=postgres, got %s", cfg.Database.User)
+	}
+	if cfg.Database.Password != "" {
+		t.Errorf("expected empty default POSTGRES_PASSWORD (required), got %s", cfg.Database.Password)
+	}
+	if cfg.Database.DBName != "events" {
+		t.Errorf("expected default POSTGRES_DB=events, got %s", cfg.Database.DBName)
+	}
+	if cfg.Database.SSLMode != "disable" {
+		t.Errorf("expected default POSTGRES_SSLMODE=disable, got %s", cfg.Database.SSLMode)
+	}
+	if cfg.EventLog.RetentionPeriodDays != 90 {
+		t.Errorf("expected default RETENTION_PERIOD_DAYS=90, got %d", cfg.EventLog.RetentionPeriodDays)
+	}
+	if cfg.EventLog.MaxExportSize != 10000 {
+		t.Errorf("expected default MAX_EXPORT_SIZE=10000, got %d", cfg.EventLog.MaxExportSize)
+	}
+	if cfg.EventLog.RetentionCron != "0 2 * * *" {
+		t.Errorf("expected default RETENTION_CRON='0 2 * * *', got %s", cfg.EventLog.RetentionCron)
+	}
+	if cfg.Features.KafkaEnabled != false {
+		t.Errorf("expected default KAFKA_ENABLED=false, got %v", cfg.Features.KafkaEnabled)
+	}
+	if cfg.Features.AutoMigrate != true {
+		t.Errorf("expected default AUTO_MIGRATE=true, got %v", cfg.Features.AutoMigrate)
+	}
+}
+
+func TestLoad_RequiredVsOptionalVariables(t *testing.T) {
+	// Test that service can start with only POSTGRES_PASSWORD set
+	envVars := []string{
+		"SERVER_PORT",
+		"POSTGRES_HOST", "POSTGRES_PORT", "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB", "POSTGRES_SSLMODE",
+		"KAFKA_ENABLED", "KAFKA_HOST", "KAFKA_PORT", "KAFKA_TOPIC", "KAFKA_GROUP_ID",
+		"RETENTION_PERIOD_DAYS", "MAX_EXPORT_SIZE", "RETENTION_CRON",
+		"AUTO_MIGRATE",
+	}
+	for _, v := range envVars {
+		os.Unsetenv(v)
+	}
+	defer func() {
+		for _, v := range envVars {
+			os.Unsetenv(v)
+		}
+	}()
+
+	// Set only the required variable
+	os.Setenv("POSTGRES_PASSWORD", "test-password")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() with only POSTGRES_PASSWORD set should succeed, got error: %v", err)
+	}
+
+	// Verify required field is set
+	if cfg.Database.Password != "test-password" {
+		t.Errorf("expected POSTGRES_PASSWORD=test-password, got %s", cfg.Database.Password)
+	}
+
+	// Verify all defaults are applied
+	if cfg.Server.Port != "8080" {
+		t.Errorf("expected default SERVER_PORT=8080, got %s", cfg.Server.Port)
+	}
+	if cfg.Database.Host != "localhost" {
+		t.Errorf("expected default POSTGRES_HOST=localhost, got %s", cfg.Database.Host)
+	}
+	if cfg.Database.User != "postgres" {
+		t.Errorf("expected default POSTGRES_USER=postgres, got %s", cfg.Database.User)
+	}
+}
