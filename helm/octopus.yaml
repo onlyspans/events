@@ -18,8 +18,8 @@ env:
   # Kafka Configuration (only used when KAFKA_ENABLED=true)
   # Use comma-separated list for multiple brokers: "broker1:9092,broker2:9092,broker3:9092"
   KAFKA_BROKERS: "#{Kafka.Host}:#{Kafka.Port}"
-  KAFKA_TOPIC: "event-logs"
-  KAFKA_GROUP_ID: "event-logs-group"
+  KAFKA_TOPIC: "events"
+  KAFKA_GROUP_ID: "events-group"
   KAFKA_USERNAME: "#{Kafka.Username}"
   KAFKA_PASSWORD: "#{Kafka.Password}"
 

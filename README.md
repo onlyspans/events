@@ -35,7 +35,7 @@ The service consists of a **unified single binary** (`cmd/events/main.go`) that 
 3. Events are searchable via `/events` endpoint and exportable via `/events/export`
 
 **Full Mode (Kafka + HTTP):**
-1. Events can be published to Kafka topic (default: "event-logs")
+1. Events can be published to Kafka topic (default: "events")
 2. Kafka consumer reads events in batches and persists to PostgreSQL
 3. Additionally, events can be ingested directly via HTTP endpoints
 4. All events are searchable and exportable regardless of ingestion method
@@ -129,32 +129,32 @@ See `.env.example` or `.env.kafka.example` for complete configuration reference 
 
 Complete list of all configuration options:
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| **Server Configuration** ||||
-| `SERVER_PORT` | No | `8080` | HTTP server port |
-| **Database Configuration** ||||
-| `POSTGRES_HOST` | No | `localhost` | PostgreSQL host |
-| `POSTGRES_PORT` | No | `5432` | PostgreSQL port |
-| `POSTGRES_USER` | No | `postgres` | PostgreSQL username |
-| `POSTGRES_PASSWORD` | **Yes** | *(none)* | PostgreSQL password |
-| `POSTGRES_DB` | No | `events` | PostgreSQL database name |
-| **Feature Flags** ||||
-| `KAFKA_ENABLED` | No | `false` | Enable Kafka consumer |
-| `AUTO_MIGRATE` | No | `true` | Run migrations on startup |
-| **Kafka Configuration** (only used if `KAFKA_ENABLED=true`) ||||
-| `KAFKA_HOST` | No | `localhost` | Kafka broker host |
-| `KAFKA_PORT` | No | `9092` | Kafka broker port |
-| `KAFKA_TOPIC` | No | `event-logs` | Kafka topic to consume |
-| `KAFKA_GROUP_ID` | No | `event-logs-group` | Kafka consumer group ID |
-| `KAFKA_USERNAME` | No | *(none)* | Kafka SASL username (enables SASL if set) |
-| `KAFKA_PASSWORD` | No | *(none)* | Kafka SASL password |
-| `KAFKA_CONSUMER_OFFSET` | No | `newest` | Initial offset: `newest` or `oldest` |
-| **Event Retention** ||||
-| `RETENTION_PERIOD_DAYS` | No | `90` | Days to keep events before deletion |
-| `RETENTION_CRON` | No | `0 2 * * *` | Cron schedule for retention job (daily at 2 AM) |
-| **Export Limits** ||||
-| `MAX_EXPORT_SIZE` | No | `10000` | Maximum events per CSV export |
+| Variable | Required | Default        | Description |
+|----------|----------|----------------|-------------|
+| **Server Configuration** ||                ||
+| `SERVER_PORT` | No | `8080`         | HTTP server port |
+| **Database Configuration** ||                ||
+| `POSTGRES_HOST` | No | `localhost`    | PostgreSQL host |
+| `POSTGRES_PORT` | No | `5432`         | PostgreSQL port |
+| `POSTGRES_USER` | No | `postgres`     | PostgreSQL username |
+| `POSTGRES_PASSWORD` | **Yes** | *(none)*       | PostgreSQL password |
+| `POSTGRES_DB` | No | `events`       | PostgreSQL database name |
+| **Feature Flags** ||                ||
+| `KAFKA_ENABLED` | No | `false`        | Enable Kafka consumer |
+| `AUTO_MIGRATE` | No | `true`         | Run migrations on startup |
+| **Kafka Configuration** (only used if `KAFKA_ENABLED=true`) ||                ||
+| `KAFKA_HOST` | No | `localhost`    | Kafka broker host |
+| `KAFKA_PORT` | No | `9092`         | Kafka broker port |
+| `KAFKA_TOPIC` | No | `events`       | Kafka topic to consume |
+| `KAFKA_GROUP_ID` | No | `events-group` | Kafka consumer group ID |
+| `KAFKA_USERNAME` | No | *(none)*       | Kafka SASL username (enables SASL if set) |
+| `KAFKA_PASSWORD` | No | *(none)*       | Kafka SASL password |
+| `KAFKA_CONSUMER_OFFSET` | No | `newest`       | Initial offset: `newest` or `oldest` |
+| **Event Retention** ||                ||
+| `RETENTION_PERIOD_DAYS` | No | `90`           | Days to keep events before deletion |
+| `RETENTION_CRON` | No | `0 2 * * *`    | Cron schedule for retention job (daily at 2 AM) |
+| **Export Limits** ||                ||
+| `MAX_EXPORT_SIZE` | No | `10000`        | Maximum events per CSV export |
 
 For detailed configuration examples, see [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 

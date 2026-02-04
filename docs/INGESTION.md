@@ -280,7 +280,7 @@ event := map[string]interface{}{
 
 message, _ := json.Marshal(event)
 msg := &sarama.ProducerMessage{
-    Topic: "event-logs",
+    Topic: "events",
     Value: sarama.StringEncoder(message),
 }
 
@@ -294,7 +294,7 @@ if err != nil {
 
 When `KAFKA_ENABLED=true`:
 
-- **Consumer Group:** `event-logs-group` (configurable via `KAFKA_GROUP_ID`)
+- **Consumer Group:** `events-group` (configurable via `KAFKA_GROUP_ID`)
 - **Batch Processing:** Up to 100 events or 500ms timeout
 - **Offset Management:** Manual commit after successful batch persistence
 - **Error Handling:** Failed events are logged and skipped (offset still committed to avoid blocking)

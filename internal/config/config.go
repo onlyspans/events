@@ -28,8 +28,8 @@ import (
 //
 // Kafka Configuration (when KAFKA_ENABLED=true):
 //   - KAFKA_BROKERS: Comma-separated broker addresses (e.g., "localhost:9092,broker2:9092")
-//   - KAFKA_TOPIC (default: event-logs)
-//   - KAFKA_GROUP_ID (default: event-logs-group)
+//   - KAFKA_TOPIC (default: events)
+//   - KAFKA_GROUP_ID (default: events-group)
 //   - KAFKA_USERNAME (optional, enables SASL/SCRAM)
 //   - KAFKA_PASSWORD (optional, enables SASL/SCRAM)
 //   - KAFKA_MAX_POLL_RECORDS (default: 100)
@@ -103,8 +103,8 @@ func Load() (*Config, error) {
 		},
 		Kafka: KafkaConfig{
 			Brokers:           getEnv("KAFKA_BROKERS", "localhost:9092"),
-			Topic:             getEnv("KAFKA_TOPIC", "event-logs"),
-			GroupID:           getEnv("KAFKA_GROUP_ID", "event-logs-group"),
+			Topic:             getEnv("KAFKA_TOPIC", "events"),
+			GroupID:           getEnv("KAFKA_GROUP_ID", "events-group"),
 			Username:          getEnv("KAFKA_USERNAME", ""),
 			Password:          getEnv("KAFKA_PASSWORD", ""),
 			MaxPollRecords:    getEnvAsInt("KAFKA_MAX_POLL_RECORDS", 100),
@@ -126,7 +126,6 @@ func Load() (*Config, error) {
 
 	return cfg, nil
 }
-
 
 // GetBrokers returns a list of Kafka broker addresses.
 func (c *KafkaConfig) GetBrokers() []string {
@@ -188,4 +187,3 @@ func getEnvAsBool(key string, defaultValue bool) bool {
 	}
 	return value
 }
-

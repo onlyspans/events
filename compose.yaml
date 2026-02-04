@@ -29,8 +29,8 @@ services:
 
       # Kafka configuration (only used if KAFKA_ENABLED=true)
       - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:29092}
-      - KAFKA_TOPIC=${KAFKA_TOPIC:-event-logs}
-      - KAFKA_GROUP_ID=${KAFKA_GROUP_ID:-event-logs-group}
+      - KAFKA_TOPIC=${KAFKA_TOPIC:-events}
+      - KAFKA_GROUP_ID=${KAFKA_GROUP_ID:-events-group}
 
       # Server configuration
       - SERVER_PORT=8080

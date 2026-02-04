@@ -97,7 +97,7 @@ Below is a comprehensive analysis of potential simplifications, ordered by impac
 #### 3.1.2 **[HIGH IMPACT] Replace Kafka with Direct HTTP Ingestion**
 
 **Current State:**
-- Events arrive via Kafka (topic: `event-logs`)
+- Events arrive via Kafka (topic: `events`)
 - Requires Kafka + Zookeeper (2 containers, ~500MB memory)
 - Complex configuration (brokers, authentication, consumer groups)
 
@@ -305,7 +305,7 @@ services:
       - POSTGRES_HOST=postgres
       - KAFKA_ENABLED=true
       - KAFKA_HOST=kafka
-      - KAFKA_TOPIC=event-logs
+      - KAFKA_TOPIC=events
     ports:
       - "8080:8080"
 ```

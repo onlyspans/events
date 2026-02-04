@@ -179,8 +179,8 @@ Single-row table for runtime configuration:
 
 The Kafka consumer is only active when `KAFKA_ENABLED=true`. When enabled:
 
-- Consumes from topic specified in `KAFKA_TOPIC` (default: "event-logs")
-- Consumer group: `KAFKA_GROUP_ID` (default: "event-logs-group")
+- Consumes from topic specified in `KAFKA_TOPIC` (default: "events")
+- Consumer group: `KAFKA_GROUP_ID` (default: "events-group")
 - Batches up to 100 messages or 500ms timeout
 - Manual offset commits only after successful batch persistence
 - Failed messages are logged and skipped (offset still committed to avoid blocking)
