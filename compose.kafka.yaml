@@ -1,24 +1,12 @@
-# Docker Compose override for Kafka-enabled deployments
 # Usage: docker compose -f compose.yaml -f compose.kafka.yaml up
-#
-# This override activates Kafka services and configures the events service
-# to use Kafka consumer.
-#
-# When using this override:
-# - All 4 services start: postgres, events, zookeeper, kafka
-# - KAFKA_ENABLED=true in events service
-# - Events service waits for Kafka to be healthy before starting
 
 services:
-  # Activate zookeeper (override profile to make it start by default)
   zookeeper:
     profiles: [""]
 
-  # Activate kafka (override profile to make it start by default)
   kafka:
     profiles: [""]
 
-  # Enable Kafka consumer and add Kafka dependency
   events:
     environment:
       - KAFKA_ENABLED=true
