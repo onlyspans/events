@@ -16,6 +16,13 @@ type Config struct {
 	Database DatabaseConfig
 	Kafka    KafkaConfig
 	EventLog EventLogConfig
+	Features FeatureFlags
+}
+
+// FeatureFlags holds feature toggles for optional functionality.
+type FeatureFlags struct {
+	KafkaEnabled bool
+	AutoMigrate  bool
 }
 
 // ServerConfig holds HTTP server configuration.
@@ -95,6 +102,10 @@ func Load() (*Config, error) {
 			MaxExportSize:       getEnvAsInt("MAX_EXPORT_SIZE", 10000),
 			RetentionCron:       getEnv("RETENTION_CRON", "0 2 * * *"), // Daily at 2 AM
 		},
+		Features: FeatureFlags{
+			KafkaEnabled: getEnvAsBool("KAFKA_ENABLED", false),
+			AutoMigrate:  getEnvAsBool("AUTO_MIGRATE", true),
+		},
 	}
 
 	return cfg, nil
@@ -143,6 +154,23 @@ func getEnvAsInt(key string, defaultValue int) int {
 	value, err := strconv.Atoi(valueStr)
 	if err != nil {
 		slog.Warn("failed to parse environment variable as integer, using default",
+			"key", key,
+			"value", valueStr,
+			"default", defaultValue,
+			"error", err)
+		return defaultValue
+	}
+	return value
+}
+
+func getEnvAsBool(key string, defaultValue bool) bool {
+	valueStr := os.Getenv(key)
+	if valueStr == "" {
+		return defaultValue
+	}
+	value, err := strconv.ParseBool(valueStr)
+	if err != nil {
+		slog.Warn("failed to parse environment variable as boolean, using default",
 			"key", key,
 			"value", valueStr,
 			"default", defaultValue,
