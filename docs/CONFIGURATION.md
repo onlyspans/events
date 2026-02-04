@@ -243,14 +243,14 @@ KAFKA_PORT=29092  # External port in some Docker setups
 #### KAFKA_TOPIC
 
 **Type:** String
-**Default:** `event-logs`
+**Default:** `events`
 **Required:** No (if Kafka enabled)
 
 Kafka topic to consume events from. Topic must exist before starting the consumer.
 
 **Example:**
 ```bash
-KAFKA_TOPIC=event-logs
+KAFKA_TOPIC=events
 KAFKA_TOPIC=production-events
 ```
 
@@ -259,14 +259,14 @@ KAFKA_TOPIC=production-events
 #### KAFKA_GROUP_ID
 
 **Type:** String
-**Default:** `event-logs-group`
+**Default:** `events-group`
 **Required:** No (if Kafka enabled)
 
 Kafka consumer group ID. Multiple instances with the same group ID share the load (partitions are distributed).
 
 **Example:**
 ```bash
-KAFKA_GROUP_ID=event-logs-group
+KAFKA_GROUP_ID=events-group
 KAFKA_GROUP_ID=events-consumer-prod
 ```
 
@@ -443,7 +443,7 @@ POSTGRES_PASSWORD=dev_password
 # Kafka (optional, using defaults)
 # KAFKA_ENABLED=true  # Set by compose.kafka.yaml
 # KAFKA_HOST=kafka
-# KAFKA_TOPIC=event-logs
+# KAFKA_TOPIC=events
 ```
 
 **Docker Compose:**
@@ -664,7 +664,7 @@ docker compose exec kafka kafka-topics --list --bootstrap-server localhost:9092
 
 **3. Verify topic exists:**
 ```bash
-docker compose exec kafka kafka-topics --describe --topic event-logs --bootstrap-server localhost:9092
+docker compose exec kafka kafka-topics --describe --topic events --bootstrap-server localhost:9092
 ```
 
 ---

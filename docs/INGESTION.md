@@ -217,7 +217,7 @@ curl -X POST http://localhost:8080/events/ingest/batch \
 
 **Requirements:** `KAFKA_ENABLED=true` in service configuration
 
-**Topic:** `event-logs` (configurable via `KAFKA_TOPIC`)
+**Topic:** `events` (configurable via `KAFKA_TOPIC`)
 
 **Message Format:** JSON (same schema as HTTP single event ingestion)
 
@@ -249,7 +249,7 @@ The message body should match the HTTP single event ingestion schema:
 ```bash
 docker exec -it kafka kafka-console-producer \
   --broker-list localhost:9092 \
-  --topic event-logs
+  --topic events
 
 # Then paste JSON messages (one per line):
 {"user_name":"john.doe","category":"document","action":"create"}
