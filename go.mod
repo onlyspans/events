@@ -12,6 +12,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.40.0
 	github.com/xdg-go/scram v1.2.0
+	golang.org/x/sync v0.19.0
 )
 
 require (

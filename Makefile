@@ -1,12 +1,15 @@
-.PHONY: help build build-service build-worker run-service run-worker test test-unit test-integration clean docker-build migrate-up migrate-down
+.PHONY: help build build-events build-service build-worker run run-events run-service run-worker test test-unit test-integration clean docker-build migrate-up migrate-down
 
 help:
 	@echo "Available targets:"
-	@echo "  build              - Build both service and worker binaries"
-	@echo "  build-service      - Build service binary"
-	@echo "  build-worker       - Build worker binary"
-	@echo "  run-service        - Run the service locally"
-	@echo "  run-worker         - Run the worker locally"
+	@echo "  build              - Build unified events binary (cmd/events)"
+	@echo "  build-events       - Build unified events binary (same as build)"
+	@echo "  build-service      - Build legacy service binary (deprecated)"
+	@echo "  build-worker       - Build legacy worker binary (deprecated)"
+	@echo "  run                - Run the unified events binary locally"
+	@echo "  run-events         - Run the unified events binary (same as run)"
+	@echo "  run-service        - Run the legacy service locally (deprecated)"
+	@echo "  run-worker         - Run the legacy worker locally (deprecated)"
 	@echo "  test               - Run all tests (unit + integration)"
 	@echo "  test-unit          - Run unit tests only"
 	@echo "  test-integration   - Run integration tests only (requires Docker)"
@@ -15,22 +18,34 @@ help:
 	@echo "  migrate-up         - Run database migrations up"
 	@echo "  migrate-down       - Run database migrations down"
 
-build: build-service build-worker
+# New unified binary (default)
+build: build-events
 
+build-events:
+	@echo "Building unified events binary..."
+	go build -o bin/events ./cmd/events
+
+run: run-events
+
+run-events:
+	@echo "Running unified events binary..."
+	go run ./cmd/events
+
+# Legacy binaries (kept for backward compatibility)
 build-service:
-	@echo "Building service..."
+	@echo "Building service (deprecated, use 'make build' instead)..."
 	go build -o bin/service ./cmd/service
 
 build-worker:
-	@echo "Building worker..."
+	@echo "Building worker (deprecated, use 'make build' instead)..."
 	go build -o bin/worker ./cmd/worker
 
 run-service:
-	@echo "Running service..."
+	@echo "Running service (deprecated, use 'make run' instead)..."
 	go run ./cmd/service
 
 run-worker:
-	@echo "Running worker..."
+	@echo "Running worker (deprecated, use 'make run' instead)..."
 	go run ./cmd/worker
 
 test:
