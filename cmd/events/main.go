@@ -14,6 +14,7 @@ import (
 	"github.com/onlyspans/events/internal/config"
 	"github.com/onlyspans/events/internal/consumer"
 	"github.com/onlyspans/events/internal/handler"
+	"github.com/onlyspans/events/internal/migrator"
 	"github.com/onlyspans/events/internal/repository"
 	"github.com/onlyspans/events/internal/service"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -64,6 +65,16 @@ func main() {
 		os.Exit(1)
 	}
 	logger.Info("database connection established")
+
+	// Run database migrations if auto-migrate is enabled
+	if cfg.Features.AutoMigrate {
+		if err := migrator.Run(cfg.Database.DSN()); err != nil {
+			logger.Error("migration failed", "error", err)
+			os.Exit(1)
+		}
+	} else {
+		logger.Info("auto-migrate disabled, skipping database migrations")
+	}
 
 	// Initialize repositories
 	eventRepo := repository.NewEventRepository(db)

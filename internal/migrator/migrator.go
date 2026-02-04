@@ -109,9 +109,6 @@ func Run(dbURL string) error {
 	}
 
 	return nil
-
-	slog.Info("migrations completed successfully")
-	return nil
 }
 
 // acquireAdvisoryLock attempts to acquire a PostgreSQL advisory lock with the given context timeout.

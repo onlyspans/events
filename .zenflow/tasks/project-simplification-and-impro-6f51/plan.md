@@ -421,7 +421,8 @@ docker run -d --name test-postgres -e POSTGRES_PASSWORD=test -p 5433:5432 postgr
 
 ---
 
-### [ ] Phase 2 - Task 9: Integrate Migrator into Binary Startup
+### [x] Phase 2 - Task 9: Integrate Migrator into Binary Startup
+<!-- chat-id: 3b4c2afc-83a2-46f8-af10-dfa05366b88c -->
 
 **Goal**: Call embedded migrator from main.go on startup when `AUTO_MIGRATE=true`.
 
@@ -462,11 +463,32 @@ AUTO_MIGRATE=false ./bin/events  # Should start without running migrations
 ```
 
 **Acceptance Criteria**:
-- [ ] Migrations run automatically on startup when `AUTO_MIGRATE=true`
-- [ ] Service exits with error if migrations fail
-- [ ] Service starts without migrations when `AUTO_MIGRATE=false`
-- [ ] Logs clearly indicate migration status
-- [ ] Multiple instances can start concurrently without migration conflicts
+- [x] Migrations run automatically on startup when `AUTO_MIGRATE=true`
+- [x] Service exits with error if migrations fail
+- [x] Service starts without migrations when `AUTO_MIGRATE=false`
+- [x] Logs clearly indicate migration status
+- [x] Multiple instances can start concurrently without migration conflicts
+
+**Status**: ✅ Complete. Successfully integrated embedded migrator into binary startup:
+- Added `internal/migrator` import to `cmd/events/main.go`
+- Integrated migration call in startup sequence (after DB connection, before repository init)
+- Respects `AUTO_MIGRATE` feature flag (true by default)
+- Service exits with error if migrations fail
+- Service logs "auto-migrate disabled, skipping database migrations" when `AUTO_MIGRATE=false`
+- Migration logs from migrator package clearly distinguish between:
+  - "migrations completed successfully" (new migrations applied)
+  - "no migrations to apply, database is up to date" (already current)
+- Created comprehensive integration tests in `cmd/events/main_integration_test.go`:
+  - Test migrations run on startup
+  - Test migrations are idempotent (can run multiple times)
+  - Test concurrent migration attempts are serialized (advisory lock)
+  - Test AUTO_MIGRATE=false mode
+- All tests pass with testcontainers
+- Verified with manual testing:
+  - Binary starts and runs migrations successfully
+  - Database tables (events, settings, schema_migrations) created
+  - Health endpoints work after migration
+  - Service starts without errors in both AUTO_MIGRATE=true and AUTO_MIGRATE=false modes
 
 ---
 
