@@ -371,7 +371,8 @@ KAFKA_ENABLED=true docker compose up -d
 
 ---
 
-### [ ] Phase 2 - Task 8: Create Embedded Migration Package
+### [x] Phase 2 - Task 8: Create Embedded Migration Package
+<!-- chat-id: c29c38f9-1564-47f9-8700-ba4ac2f69bfa -->
 
 **Goal**: Implement embedded migration runner using golang-migrate library.
 
@@ -411,12 +412,12 @@ docker run -d --name test-postgres -e POSTGRES_PASSWORD=test -p 5433:5432 postgr
 ```
 
 **Acceptance Criteria**:
-- [ ] Migration files are embedded in binary
-- [ ] Migrations run successfully on startup
-- [ ] Advisory lock prevents concurrent migrations
-- [ ] `ErrNoChange` is handled gracefully (not logged as error)
-- [ ] Integration tests verify migrations with testcontainers
-- [ ] Existing migration files work without modification
+- [x] Migration files are embedded in binary
+- [x] Migrations run successfully on startup
+- [x] Advisory lock prevents concurrent migrations
+- [x] `ErrNoChange` is handled gracefully (not logged as error)
+- [x] Integration tests verify migrations with testcontainers
+- [x] Existing migration files work without modification
 
 ---
 
