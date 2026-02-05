@@ -51,16 +51,13 @@ func NewKafkaConsumer(cfg *config.KafkaConfig, eventService *service.EventServic
 	saramaConfig.Consumer.MaxProcessingTime = 30 * time.Second
 	saramaConfig.Consumer.Return.Errors = true
 
-	// Manual offset management for reliability
 	saramaConfig.Consumer.Offsets.AutoCommit.Enable = false
 
-	// Batch configuration
-	saramaConfig.Consumer.Fetch.Min = int32(cfg.FetchMinBytes)
-	saramaConfig.Consumer.MaxWaitTime = cfg.FetchMaxWait()
-	saramaConfig.Consumer.Group.Session.Timeout = cfg.SessionTimeout()
-	saramaConfig.Consumer.Group.Heartbeat.Interval = cfg.HeartbeatIntervalDuration()
+	saramaConfig.Consumer.Fetch.Min = 1
+	saramaConfig.Consumer.MaxWaitTime = 500 * time.Millisecond
+	saramaConfig.Consumer.Group.Session.Timeout = 30 * time.Second
+	saramaConfig.Consumer.Group.Heartbeat.Interval = 10 * time.Second
 
-	// SASL authentication if credentials are provided
 	if cfg.Username != "" && cfg.Password != "" {
 		saramaConfig.Net.SASL.Enable = true
 		saramaConfig.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512

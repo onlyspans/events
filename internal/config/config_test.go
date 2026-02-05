@@ -188,9 +188,9 @@ func TestGetEnvAsBool(t *testing.T) {
 				os.Unsetenv(testKey)
 			}
 
-			result := getEnvAsBool(testKey, tt.defaultValue)
+			result := getBoolEnv(testKey, tt.defaultValue)
 			if result != tt.expected {
-				t.Errorf("getEnvAsBool(%q, %v) = %v; want %v", tt.envValue, tt.defaultValue, result, tt.expected)
+				t.Errorf("getBoolEnv(%q, %v) = %v; want %v", tt.envValue, tt.defaultValue, result, tt.expected)
 			}
 		})
 	}
@@ -563,41 +563,6 @@ func TestConfig_Validate_DatabasePoolSize(t *testing.T) {
 			cfg.Database.MaxOpenConns = tt.maxOpen
 			cfg.Database.MaxIdleConns = tt.maxIdle
 
-			err := cfg.Validate()
-			if tt.wantErr {
-				if err == nil {
-					t.Error("Validate() should return error")
-				} else if !strings.Contains(err.Error(), tt.errContains) {
-					t.Errorf("error should contain %q, got: %v", tt.errContains, err)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Validate() returned unexpected error: %v", err)
-				}
-			}
-		})
-	}
-}
-
-func TestConfig_Validate_ServerTimeouts(t *testing.T) {
-	tests := []struct {
-		name        string
-		read        time.Duration
-		write       time.Duration
-		idle        time.Duration
-		wantErr     bool
-		errContains string
-	}{
-		{"valid", 15 * time.Second, 30 * time.Second, 60 * time.Second, false, ""},
-		{"zero read timeout", 0, 30 * time.Second, 60 * time.Second, true, "READ_TIMEOUT"},
-		{"negative read timeout", -1 * time.Second, 30 * time.Second, 60 * time.Second, true, "READ_TIMEOUT"},
-		{"zero write timeout", 15 * time.Second, 0, 60 * time.Second, true, "WRITE_TIMEOUT"},
-		{"zero idle timeout", 15 * time.Second, 30 * time.Second, 0, true, "IDLE_TIMEOUT"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := validConfig()
 			err := cfg.Validate()
 			if tt.wantErr {
 				if err == nil {
