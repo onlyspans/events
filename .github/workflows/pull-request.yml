@@ -39,29 +39,3 @@ jobs:
 
       - name: Run integration tests
         run: go test -v -race -coverprofile=coverage-integration.out -covermode=atomic ./internal/repository/...
-
-      - name: Combine coverage reports
-        run: |
-          go install github.com/wadey/gocovmerge@latest
-          gocovmerge coverage.out coverage-integration.out > coverage.txt
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: coverage.txt
-          retention-days: 5
-
-      - name: Coverage report
-        uses: fgrosse/go-coverage-report@v1.1.0
-        if: github.event_name == 'pull_request'
-        with:
-          coverage-artifact-name: coverage
-          coverage-file-name: coverage.txt
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage.txt
-          flags: unittests
-          fail_ci_if_error: false
