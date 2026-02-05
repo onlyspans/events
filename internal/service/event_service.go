@@ -16,7 +16,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// Compile-time check that EventService implements ports.EventService.
 var _ ports.EventService = (*EventService)(nil)
 
 var (
@@ -59,7 +58,6 @@ type EventService struct {
 	maxExportSize int
 }
 
-// NewEventService creates a new EventService.
 func NewEventService(repo ports.EventRepository, maxExportSize int) *EventService {
 	return &EventService{
 		repo:          repo,
@@ -250,7 +248,7 @@ func (s *EventService) dtoToEntity(dto *dto.EventDTO) (*domain.Event, error) {
 		CreatedAt:     time.Now(),
 	}
 
-	// Parse ID if provided, otherwise generate new one
+	// Parse ID if provided, otherwise generate a new one
 	if dto.ID != "" {
 		id, err := uuid.Parse(dto.ID)
 		if err != nil {
@@ -263,7 +261,7 @@ func (s *EventService) dtoToEntity(dto *dto.EventDTO) (*domain.Event, error) {
 		event.ID = uuid.New()
 	}
 
-	// Set default timestamp if not provided
+	// Set the default timestamp if not provided
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now()
 	}
