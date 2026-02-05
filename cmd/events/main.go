@@ -136,7 +136,6 @@ func main() {
 
 	mux.Handle("/metrics", promhttp.Handler())
 
-	// Create middleware chain: recovery (outermost) -> logging
 	chain := middleware.Chain(
 		middleware.Recovery(logger),
 		middleware.Logging(logger),

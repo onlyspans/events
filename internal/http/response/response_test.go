@@ -58,7 +58,6 @@ func TestJSON(t *testing.T) {
 
 			if tt.wantBody != "" {
 				body := rec.Body.String()
-				// JSON encoder adds newline
 				if body != tt.wantBody+"\n" {
 					t.Errorf("expected body %q, got %q", tt.wantBody, body)
 				}
