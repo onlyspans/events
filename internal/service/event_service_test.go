@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -510,11 +511,17 @@ func TestCreateEventsBatch_RepositoryError(t *testing.T) {
 		t.Errorf("Expected 3 errors, got %d", len(response.Errors))
 	}
 
-	// Verify all error messages contain "failed to save event"
+	// Verify all error messages contain "failed to save" and include event index
 	for i, err := range response.Errors {
-		if !contains(err.Error, "failed to save event") {
-			t.Errorf("Error at index %d should contain 'failed to save event', got: %s",
+		if !contains(err.Error, "failed to save") {
+			t.Errorf("Error at index %d should contain 'failed to save', got: %s",
 				i, err.Error)
+		}
+		// Check that error includes event index for better debugging
+		expectedIndexPrefix := fmt.Sprintf("event %d:", i)
+		if !contains(err.Error, expectedIndexPrefix) {
+			t.Errorf("Error at index %d should contain '%s', got: %s",
+				i, expectedIndexPrefix, err.Error)
 		}
 	}
 }

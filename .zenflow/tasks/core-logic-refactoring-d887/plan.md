@@ -202,16 +202,17 @@ Reduce duplication in DTOs and standardize field naming.
 
 ---
 
-### [ ] Step: Eliminate Service Code Duplication
+### [x] Step: Eliminate Service Code Duplication
+<!-- chat-id: ce80d4a8-da37-456a-a414-f8d6115e61b9 -->
 
 Refactor event service to remove duplicate code patterns.
 
 **Tasks:**
-- [ ] Extract common event processing logic from `CreateEvent` and `CreateEventsBatch`
-- [ ] Create internal helper method `processIngestRequest()`
-- [ ] Simplify the batch method to iterate over the helper
-- [ ] Improve error context in batch processing (include event index)
-- [ ] Run tests to verify behavior is preserved
+- [x] Extract common event processing logic from `CreateEvent` and `CreateEventsBatch`
+- [x] Create internal helper method `processIngestRequest()`
+- [x] Simplify the batch method to iterate over the helper
+- [x] Improve error context in batch processing (include event index)
+- [x] Run tests to verify behavior is preserved
 
 **Files:**
 - Modify: `internal/service/event_service.go`
