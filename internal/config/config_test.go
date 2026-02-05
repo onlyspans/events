@@ -2,7 +2,9 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoad_DefaultFeatureFlags(t *testing.T) {
@@ -186,9 +188,9 @@ func TestGetEnvAsBool(t *testing.T) {
 				os.Unsetenv(testKey)
 			}
 
-			result := getEnvAsBool(testKey, tt.defaultValue)
+			result := getBoolEnv(testKey, tt.defaultValue)
 			if result != tt.expected {
-				t.Errorf("getEnvAsBool(%q, %v) = %v; want %v", tt.envValue, tt.defaultValue, result, tt.expected)
+				t.Errorf("getBoolEnv(%q, %v) = %v; want %v", tt.envValue, tt.defaultValue, result, tt.expected)
 			}
 		})
 	}
@@ -212,10 +214,6 @@ func TestLoad_MinimalConfiguration(t *testing.T) {
 		t.Fatalf("Load() failed: %v", err)
 	}
 
-	// Verify defaults
-	if cfg.Server.Port != "8080" {
-		t.Errorf("expected default SERVER_PORT=8080, got %s", cfg.Server.Port)
-	}
 	if cfg.Database.DSN != "" {
 		t.Errorf("expected empty default POSTGRES_DSN, got %s", cfg.Database.DSN)
 	}
@@ -357,5 +355,316 @@ func TestKafkaConfig_GetBrokers(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// validConfig returns a Config with valid values for testing.
+func validConfig() *Config {
+	return &Config{
+		Database: DatabaseConfig{
+			DSN:             "postgres://user:pass@localhost:5432/db",
+			MaxOpenConns:    25,
+			MaxIdleConns:    5,
+			ConnMaxLifetime: 5 * time.Minute,
+		},
+		Kafka: KafkaConfig{
+			Brokers: "localhost:9092",
+			Topic:   "events",
+			GroupID: "events-group",
+		},
+		EventLog: EventLogConfig{
+			RetentionPeriodDays: 90,
+			MaxExportSize:       10000,
+			RetentionCron:       "0 2 * * *",
+		},
+		Features: FeatureFlags{
+			KafkaEnabled: false,
+			AutoMigrate:  true,
+		},
+	}
+}
+
+func TestConfig_Validate_Valid(t *testing.T) {
+	cfg := validConfig()
+	if err := cfg.Validate(); err != nil {
+		t.Errorf("Validate() returned unexpected error: %v", err)
+	}
+}
+
+func TestConfig_Validate_MissingPostgresDSN(t *testing.T) {
+	cfg := validConfig()
+	cfg.Database.DSN = ""
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Error("Validate() should return error for missing POSTGRES_DSN")
+	}
+	if !strings.Contains(err.Error(), "POSTGRES_DSN") {
+		t.Errorf("error should mention POSTGRES_DSN, got: %v", err)
+	}
+}
+
+func TestConfig_Validate_KafkaEnabled(t *testing.T) {
+	tests := []struct {
+		name        string
+		brokers     string
+		topic       string
+		groupID     string
+		wantErr     bool
+		errContains string
+	}{
+		{
+			name:    "valid kafka config",
+			brokers: "localhost:9092",
+			topic:   "events",
+			groupID: "events-group",
+			wantErr: false,
+		},
+		{
+			name:        "missing brokers",
+			brokers:     "",
+			topic:       "events",
+			groupID:     "events-group",
+			wantErr:     true,
+			errContains: "KAFKA_BROKERS",
+		},
+		{
+			name:        "missing topic",
+			brokers:     "localhost:9092",
+			topic:       "",
+			groupID:     "events-group",
+			wantErr:     true,
+			errContains: "KAFKA_TOPIC",
+		},
+		{
+			name:        "missing group id",
+			brokers:     "localhost:9092",
+			topic:       "events",
+			groupID:     "",
+			wantErr:     true,
+			errContains: "KAFKA_GROUP_ID",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig()
+			cfg.Features.KafkaEnabled = true
+			cfg.Kafka.Brokers = tt.brokers
+			cfg.Kafka.Topic = tt.topic
+			cfg.Kafka.GroupID = tt.groupID
+
+			err := cfg.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Validate() should return error")
+				} else if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error should contain %q, got: %v", tt.errContains, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Validate() returned unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestConfig_Validate_RetentionPeriodDays(t *testing.T) {
+	tests := []struct {
+		name    string
+		days    int
+		wantErr bool
+	}{
+		{"valid minimum", 1, false},
+		{"valid middle", 90, false},
+		{"valid maximum", 3650, false},
+		{"too low", 0, true},
+		{"negative", -1, true},
+		{"too high", 3651, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig()
+			cfg.EventLog.RetentionPeriodDays = tt.days
+
+			err := cfg.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Validate() should return error")
+				} else if !strings.Contains(err.Error(), "RETENTION_PERIOD_DAYS") {
+					t.Errorf("error should mention RETENTION_PERIOD_DAYS, got: %v", err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Validate() returned unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestConfig_Validate_MaxExportSize(t *testing.T) {
+	tests := []struct {
+		name    string
+		size    int
+		wantErr bool
+	}{
+		{"valid minimum", 1, false},
+		{"valid middle", 10000, false},
+		{"valid maximum", 100000, false},
+		{"too low", 0, true},
+		{"negative", -1, true},
+		{"too high", 100001, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig()
+			cfg.EventLog.MaxExportSize = tt.size
+
+			err := cfg.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Validate() should return error")
+				} else if !strings.Contains(err.Error(), "MAX_EXPORT_SIZE") {
+					t.Errorf("error should mention MAX_EXPORT_SIZE, got: %v", err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Validate() returned unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestConfig_Validate_DatabasePoolSize(t *testing.T) {
+	tests := []struct {
+		name        string
+		maxOpen     int
+		maxIdle     int
+		wantErr     bool
+		errContains string
+	}{
+		{"valid", 25, 5, false, ""},
+		{"valid equal", 10, 10, false, ""},
+		{"max open too low", 0, 5, true, "DB_MAX_OPEN_CONNS"},
+		{"max open too high", 101, 5, true, "DB_MAX_OPEN_CONNS"},
+		{"max idle too low", 25, 0, true, "DB_MAX_IDLE_CONNS"},
+		{"max idle too high", 25, 101, true, "DB_MAX_IDLE_CONNS"},
+		{"idle exceeds open", 10, 15, true, "cannot exceed"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig()
+			cfg.Database.MaxOpenConns = tt.maxOpen
+			cfg.Database.MaxIdleConns = tt.maxIdle
+
+			err := cfg.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Validate() should return error")
+				} else if !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error should contain %q, got: %v", tt.errContains, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Validate() returned unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestConfig_Validate_MultipleErrors(t *testing.T) {
+	cfg := validConfig()
+	cfg.Database.DSN = ""
+	cfg.EventLog.RetentionPeriodDays = 0
+	cfg.EventLog.MaxExportSize = 0
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("Validate() should return error")
+	}
+
+	errStr := err.Error()
+	if !strings.Contains(errStr, "POSTGRES_DSN") {
+		t.Error("error should mention POSTGRES_DSN")
+	}
+	if !strings.Contains(errStr, "RETENTION_PERIOD_DAYS") {
+		t.Error("error should mention RETENTION_PERIOD_DAYS")
+	}
+	if !strings.Contains(errStr, "MAX_EXPORT_SIZE") {
+		t.Error("error should mention MAX_EXPORT_SIZE")
+	}
+}
+
+func TestLoad_NewConfigFields(t *testing.T) {
+	// Clear all environment variables
+	envVars := []string{
+		"SERVER_PORT", "SERVER_READ_TIMEOUT_SECONDS", "SERVER_WRITE_TIMEOUT_SECONDS", "SERVER_IDLE_TIMEOUT_SECONDS",
+		"POSTGRES_DSN", "DB_MAX_OPEN_CONNS", "DB_MAX_IDLE_CONNS", "DB_CONN_MAX_LIFETIME_MINUTES",
+		"KAFKA_ENABLED", "KAFKA_BROKERS", "KAFKA_TOPIC", "KAFKA_GROUP_ID",
+		"RETENTION_PERIOD_DAYS", "MAX_EXPORT_SIZE", "RETENTION_CRON",
+		"AUTO_MIGRATE",
+	}
+	for _, v := range envVars {
+		os.Unsetenv(v)
+	}
+	defer func() {
+		for _, v := range envVars {
+			os.Unsetenv(v)
+		}
+	}()
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	if cfg.Database.MaxOpenConns != 25 {
+		t.Errorf("expected default MaxOpenConns=25, got %d", cfg.Database.MaxOpenConns)
+	}
+	if cfg.Database.MaxIdleConns != 5 {
+		t.Errorf("expected default MaxIdleConns=5, got %d", cfg.Database.MaxIdleConns)
+	}
+	if cfg.Database.ConnMaxLifetime != 5*time.Minute {
+		t.Errorf("expected default ConnMaxLifetime=5m, got %v", cfg.Database.ConnMaxLifetime)
+	}
+}
+
+func TestLoad_CustomConfigFields(t *testing.T) {
+	// Set custom values
+	os.Setenv("SERVER_READ_TIMEOUT_SECONDS", "10")
+	os.Setenv("SERVER_WRITE_TIMEOUT_SECONDS", "20")
+	os.Setenv("SERVER_IDLE_TIMEOUT_SECONDS", "45")
+	os.Setenv("DB_MAX_OPEN_CONNS", "50")
+	os.Setenv("DB_MAX_IDLE_CONNS", "10")
+	os.Setenv("DB_CONN_MAX_LIFETIME_MINUTES", "10")
+	defer func() {
+		os.Unsetenv("SERVER_READ_TIMEOUT_SECONDS")
+		os.Unsetenv("SERVER_WRITE_TIMEOUT_SECONDS")
+		os.Unsetenv("SERVER_IDLE_TIMEOUT_SECONDS")
+		os.Unsetenv("DB_MAX_OPEN_CONNS")
+		os.Unsetenv("DB_MAX_IDLE_CONNS")
+		os.Unsetenv("DB_CONN_MAX_LIFETIME_MINUTES")
+	}()
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() failed: %v", err)
+	}
+
+	if cfg.Database.MaxOpenConns != 50 {
+		t.Errorf("expected MaxOpenConns=50, got %d", cfg.Database.MaxOpenConns)
+	}
+	if cfg.Database.MaxIdleConns != 10 {
+		t.Errorf("expected MaxIdleConns=10, got %d", cfg.Database.MaxIdleConns)
+	}
+	if cfg.Database.ConnMaxLifetime != 10*time.Minute {
+		t.Errorf("expected ConnMaxLifetime=10m, got %v", cfg.Database.ConnMaxLifetime)
 	}
 }

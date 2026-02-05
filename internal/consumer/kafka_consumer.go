@@ -11,7 +11,7 @@ import (
 	"github.com/IBM/sarama"
 	"github.com/onlyspans/events/internal/config"
 	"github.com/onlyspans/events/internal/dto"
-	"github.com/onlyspans/events/internal/service"
+	"github.com/onlyspans/events/internal/ports"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -33,17 +33,23 @@ var (
 	})
 )
 
+const (
+	// batchSize is the maximum number of messages to process in a single batch.
+	batchSize = 100
+	// batchTimeout is the maximum time to wait before processing a partial batch.
+	batchTimeout = 500 * time.Millisecond
+)
+
 // KafkaConsumer handles consuming events from Kafka.
 type KafkaConsumer struct {
-	consumer     sarama.ConsumerGroup
-	eventService *service.EventService
-	topic        string
-	logger       *slog.Logger
-	ready        chan bool
+	consumer sarama.ConsumerGroup
+	ingester ports.EventIngester
+	topic    string
+	logger   *slog.Logger
 }
 
 // NewKafkaConsumer creates a new KafkaConsumer.
-func NewKafkaConsumer(cfg *config.KafkaConfig, eventService *service.EventService, logger *slog.Logger) (*KafkaConsumer, error) {
+func NewKafkaConsumer(cfg *config.KafkaConfig, ingester ports.EventIngester, logger *slog.Logger) (*KafkaConsumer, error) {
 	saramaConfig := sarama.NewConfig()
 	saramaConfig.Version = sarama.V3_6_0_0
 	saramaConfig.Consumer.Group.Rebalance.Strategy = sarama.NewBalanceStrategyRoundRobin()
@@ -51,16 +57,13 @@ func NewKafkaConsumer(cfg *config.KafkaConfig, eventService *service.EventServic
 	saramaConfig.Consumer.MaxProcessingTime = 30 * time.Second
 	saramaConfig.Consumer.Return.Errors = true
 
-	// Manual offset management for reliability
 	saramaConfig.Consumer.Offsets.AutoCommit.Enable = false
 
-	// Batch configuration
-	saramaConfig.Consumer.Fetch.Min = int32(cfg.FetchMinBytes)
-	saramaConfig.Consumer.MaxWaitTime = cfg.FetchMaxWait()
-	saramaConfig.Consumer.Group.Session.Timeout = cfg.SessionTimeout()
-	saramaConfig.Consumer.Group.Heartbeat.Interval = cfg.HeartbeatIntervalDuration()
+	saramaConfig.Consumer.Fetch.Min = 1
+	saramaConfig.Consumer.MaxWaitTime = 500 * time.Millisecond
+	saramaConfig.Consumer.Group.Session.Timeout = 30 * time.Second
+	saramaConfig.Consumer.Group.Heartbeat.Interval = 10 * time.Second
 
-	// SASL authentication if credentials are provided
 	if cfg.Username != "" && cfg.Password != "" {
 		saramaConfig.Net.SASL.Enable = true
 		saramaConfig.Net.SASL.Mechanism = sarama.SASLTypeSCRAMSHA512
@@ -78,19 +81,22 @@ func NewKafkaConsumer(cfg *config.KafkaConfig, eventService *service.EventServic
 	}
 
 	return &KafkaConsumer{
-		consumer:     consumer,
-		eventService: eventService,
-		topic:        cfg.Topic,
-		logger:       logger,
-		ready:        make(chan bool),
+		consumer: consumer,
+		ingester: ingester,
+		topic:    cfg.Topic,
+		logger:   logger,
 	}, nil
 }
 
 // Start begins consuming messages from Kafka.
+// It blocks until the context is cancelled or an unrecoverable error occurs.
 func (c *KafkaConsumer) Start(ctx context.Context) error {
+	// Create ready channel once, outside the loop
+	ready := make(chan struct{})
+
 	handler := &consumerGroupHandler{
 		consumer: c,
-		ready:    c.ready,
+		ready:    ready,
 	}
 
 	wg := &sync.WaitGroup{}
@@ -111,14 +117,21 @@ func (c *KafkaConsumer) Start(ctx context.Context) error {
 				return
 			}
 
-			c.ready = make(chan bool)
+			// Reset ready channel for next session (safe because previous is closed)
+			handler.resetReady()
 		}
 	}()
 
-	<-c.ready // Wait for consumer to be ready
-	c.logger.Info("kafka consumer started", "topic", c.topic)
+	// Wait for consumer to be ready (first session established)
+	select {
+	case <-ready:
+		c.logger.Info("kafka consumer started", "topic", c.topic)
+	case <-ctx.Done():
+		c.logger.Info("context cancelled before consumer ready")
+		return ctx.Err()
+	}
 
-	// Handle errors
+	// Handle errors in a separate goroutine
 	go func() {
 		for err := range c.consumer.Errors() {
 			c.logger.Error("consumer error", "error", err)
@@ -141,11 +154,28 @@ func (c *KafkaConsumer) Close() error {
 // consumerGroupHandler implements sarama.ConsumerGroupHandler.
 type consumerGroupHandler struct {
 	consumer *KafkaConsumer
-	ready    chan bool
+	ready    chan struct{}
+	mu       sync.Mutex
+}
+
+// resetReady creates a new ready channel for the next session.
+// This must be called after a session ends and before the next one starts.
+func (h *consumerGroupHandler) resetReady() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.ready = make(chan struct{})
 }
 
 func (h *consumerGroupHandler) Setup(sarama.ConsumerGroupSession) error {
-	close(h.ready)
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	// Close ready channel to signal that the consumer is ready
+	select {
+	case <-h.ready:
+		// Already closed
+	default:
+		close(h.ready)
+	}
 	return nil
 }
 
@@ -154,10 +184,11 @@ func (h *consumerGroupHandler) Cleanup(sarama.ConsumerGroupSession) error {
 }
 
 func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	// Batch messages for efficiency
-	batchSize := 100
+	// Use session context for proper cancellation propagation
+	ctx := session.Context()
+
 	batch := make([]*eventWithMessage, 0, batchSize)
-	ticker := time.NewTicker(500 * time.Millisecond)
+	ticker := time.NewTicker(batchTimeout)
 	defer ticker.Stop()
 
 	processBatch := func() error {
@@ -174,7 +205,8 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 			dtos[i] = &ewm.EventDTO
 		}
 
-		if err := h.consumer.eventService.IngestEvents(context.Background(), dtos); err != nil {
+		// Use session context for the ingestion call
+		if err := h.consumer.ingester.IngestEvents(ctx, dtos); err != nil {
 			h.consumer.logger.Error("failed to ingest batch", "error", err, "size", len(batch))
 			return err
 		}
@@ -207,6 +239,8 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 			if err := json.Unmarshal(message.Value, &event); err != nil {
 				h.consumer.logger.Error("failed to parse message",
 					"error", err,
+					"offset", message.Offset,
+					"partition", message.Partition,
 					"message", string(message.Value))
 				eventsFailedCounter.Inc()
 				// Mark message as processed even if parsing fails to avoid reprocessing
@@ -231,9 +265,11 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 				return err
 			}
 
-		case <-session.Context().Done():
+		case <-ctx.Done():
 			// Process remaining batch before shutdown
-			processBatch()
+			if err := processBatch(); err != nil {
+				h.consumer.logger.Error("failed to process final batch on shutdown", "error", err)
+			}
 			return nil
 		}
 	}
@@ -243,13 +279,4 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 type eventWithMessage struct {
 	dto.EventDTO
 	msg *sarama.ConsumerMessage
-}
-
-// message interface to extract the original Kafka message.
-type message interface {
-	Message() *sarama.ConsumerMessage
-}
-
-func (e *eventWithMessage) Message() *sarama.ConsumerMessage {
-	return e.msg
 }

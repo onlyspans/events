@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -9,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/onlyspans/events/internal/domain"
 	"github.com/onlyspans/events/internal/dto"
-	"github.com/onlyspans/events/internal/repository"
+	"github.com/onlyspans/events/internal/ports"
 )
 
 // mockEventRepository is a mock implementation for testing.
@@ -21,6 +22,14 @@ type mockEventRepository struct {
 	searchTotal  int64
 }
 
+func (m *mockEventRepository) Create(ctx context.Context, event *domain.Event) (uuid.UUID, error) {
+	if m.saveError != nil {
+		return uuid.Nil, m.saveError
+	}
+	m.events = append(m.events, event)
+	return event.ID, nil
+}
+
 func (m *mockEventRepository) SaveBatch(ctx context.Context, events []*domain.Event) error {
 	if m.saveError != nil {
 		return m.saveError
@@ -29,7 +38,7 @@ func (m *mockEventRepository) SaveBatch(ctx context.Context, events []*domain.Ev
 	return nil
 }
 
-func (m *mockEventRepository) Search(ctx context.Context, query repository.SearchQuery) ([]*domain.Event, int64, error) {
+func (m *mockEventRepository) Search(ctx context.Context, query ports.EventSearchQuery) ([]*domain.Event, int64, error) {
 	if m.searchError != nil {
 		return nil, 0, m.searchError
 	}
@@ -182,11 +191,13 @@ func TestSearchEvents(t *testing.T) {
 	svc := NewEventService(repo, 10000)
 
 	req := dto.SearchEventsRequest{
-		User:      "test-user",
-		Page:      0,
-		Size:      20,
-		SortBy:    "timestamp",
-		SortOrder: "desc",
+		EventFilterRequest: dto.EventFilterRequest{
+			User:      "test-user",
+			SortBy:    "timestamp",
+			SortOrder: "desc",
+		},
+		Page: 0,
+		Size: 20,
 	}
 
 	result, err := svc.SearchEvents(context.Background(), req)
@@ -216,7 +227,7 @@ func TestCreateEvent(t *testing.T) {
 		{
 			name: "successful creation with all fields",
 			request: dto.EventIngestRequest{
-				UserName:      "test-user",
+				User:          "test-user",
 				Category:      "test-category",
 				Action:        "test-action",
 				DocumentName:  "test-doc.txt",
@@ -235,7 +246,7 @@ func TestCreateEvent(t *testing.T) {
 		{
 			name: "successful creation with only required fields",
 			request: dto.EventIngestRequest{
-				UserName: "test-user",
+				User:     "test-user",
 				Category: "test-category",
 				Action:   "test-action",
 			},
@@ -244,7 +255,7 @@ func TestCreateEvent(t *testing.T) {
 		{
 			name: "successful creation with timestamp defaulting",
 			request: dto.EventIngestRequest{
-				UserName:  "test-user",
+				User:      "test-user",
 				Category:  "test-category",
 				Action:    "test-action",
 				Timestamp: time.Time{}, // Zero time, should be set to now
@@ -252,7 +263,7 @@ func TestCreateEvent(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "missing required field: user_name",
+			name: "missing required field: user",
 			request: dto.EventIngestRequest{
 				Category: "test-category",
 				Action:   "test-action",
@@ -263,8 +274,8 @@ func TestCreateEvent(t *testing.T) {
 		{
 			name: "missing required field: category",
 			request: dto.EventIngestRequest{
-				UserName: "test-user",
-				Action:   "test-action",
+				User:   "test-user",
+				Action: "test-action",
 			},
 			wantErr: true,
 			errMsg:  "validation failed",
@@ -272,7 +283,7 @@ func TestCreateEvent(t *testing.T) {
 		{
 			name: "missing required field: action",
 			request: dto.EventIngestRequest{
-				UserName: "test-user",
+				User:     "test-user",
 				Category: "test-category",
 			},
 			wantErr: true,
@@ -281,7 +292,7 @@ func TestCreateEvent(t *testing.T) {
 		{
 			name: "repository save error",
 			request: dto.EventIngestRequest{
-				UserName: "test-user",
+				User:     "test-user",
 				Category: "test-category",
 				Action:   "test-action",
 			},
@@ -320,8 +331,8 @@ func TestCreateEvent(t *testing.T) {
 					t.Errorf("CreateEvent() expected 1 event saved, got %d", len(repo.events))
 				} else {
 					event := repo.events[0]
-					if event.User != tt.request.UserName {
-						t.Errorf("CreateEvent() user = %v, want %v", event.User, tt.request.UserName)
+					if event.User != tt.request.User {
+						t.Errorf("CreateEvent() user = %v, want %v", event.User, tt.request.User)
 					}
 					if event.Category != tt.request.Category {
 						t.Errorf("CreateEvent() category = %v, want %v", event.Category, tt.request.Category)
@@ -354,9 +365,9 @@ func TestCreateEventsBatch(t *testing.T) {
 		{
 			name: "all events successful",
 			requests: []dto.EventIngestRequest{
-				{UserName: "user1", Category: "cat1", Action: "action1"},
-				{UserName: "user2", Category: "cat2", Action: "action2"},
-				{UserName: "user3", Category: "cat3", Action: "action3"},
+				{User: "user1", Category: "cat1", Action: "action1"},
+				{User: "user2", Category: "cat2", Action: "action2"},
+				{User: "user3", Category: "cat3", Action: "action3"},
 			},
 			expectedSuccess: 3,
 			expectedFailure: 0,
@@ -365,11 +376,11 @@ func TestCreateEventsBatch(t *testing.T) {
 		{
 			name: "partial success - validation errors",
 			requests: []dto.EventIngestRequest{
-				{UserName: "user1", Category: "cat1", Action: "action1"}, // Valid
-				{UserName: "", Category: "cat2", Action: "action2"},      // Missing user_name
-				{UserName: "user3", Category: "", Action: "action3"},     // Missing category
-				{UserName: "user4", Category: "cat4", Action: ""},        // Missing action
-				{UserName: "user5", Category: "cat5", Action: "action5"}, // Valid
+				{User: "user1", Category: "cat1", Action: "action1"}, // Valid
+				{User: "", Category: "cat2", Action: "action2"},      // Missing user
+				{User: "user3", Category: "", Action: "action3"},     // Missing category
+				{User: "user4", Category: "cat4", Action: ""},        // Missing action
+				{User: "user5", Category: "cat5", Action: "action5"}, // Valid
 			},
 			expectedSuccess:   2,
 			expectedFailure:   3,
@@ -379,9 +390,9 @@ func TestCreateEventsBatch(t *testing.T) {
 		{
 			name: "all events with validation errors",
 			requests: []dto.EventIngestRequest{
-				{UserName: "", Category: "cat1", Action: "action1"},
-				{UserName: "user2", Category: "", Action: "action2"},
-				{UserName: "user3", Category: "cat3", Action: ""},
+				{User: "", Category: "cat1", Action: "action1"},
+				{User: "user2", Category: "", Action: "action2"},
+				{User: "user3", Category: "cat3", Action: ""},
 			},
 			expectedSuccess:   0,
 			expectedFailure:   3,
@@ -398,7 +409,7 @@ func TestCreateEventsBatch(t *testing.T) {
 		{
 			name: "single valid event",
 			requests: []dto.EventIngestRequest{
-				{UserName: "user1", Category: "cat1", Action: "action1"},
+				{User: "user1", Category: "cat1", Action: "action1"},
 			},
 			expectedSuccess: 1,
 			expectedFailure: 0,
@@ -408,7 +419,7 @@ func TestCreateEventsBatch(t *testing.T) {
 			name: "events with optional fields",
 			requests: []dto.EventIngestRequest{
 				{
-					UserName:      "user1",
+					User:          "user1",
 					Category:      "cat1",
 					Action:        "action1",
 					DocumentName:  "doc1.txt",
@@ -482,9 +493,9 @@ func TestCreateEventsBatch_RepositoryError(t *testing.T) {
 	svc := NewEventService(failingRepo, 10000)
 
 	requests := []dto.EventIngestRequest{
-		{UserName: "user1", Category: "cat1", Action: "action1"},
-		{UserName: "user2", Category: "cat2", Action: "action2"},
-		{UserName: "user3", Category: "cat3", Action: "action3"},
+		{User: "user1", Category: "cat1", Action: "action1"},
+		{User: "user2", Category: "cat2", Action: "action2"},
+		{User: "user3", Category: "cat3", Action: "action3"},
 	}
 
 	response := svc.CreateEventsBatch(context.Background(), requests)
@@ -500,11 +511,17 @@ func TestCreateEventsBatch_RepositoryError(t *testing.T) {
 		t.Errorf("Expected 3 errors, got %d", len(response.Errors))
 	}
 
-	// Verify all error messages contain "failed to save event"
+	// Verify all error messages contain "failed to save" and include event index
 	for i, err := range response.Errors {
-		if !contains(err.Error, "failed to save event") {
-			t.Errorf("Error at index %d should contain 'failed to save event', got: %s",
+		if !contains(err.Error, "failed to save") {
+			t.Errorf("Error at index %d should contain 'failed to save', got: %s",
 				i, err.Error)
+		}
+		// Check that error includes event index for better debugging
+		expectedIndexPrefix := fmt.Sprintf("event %d:", i)
+		if !contains(err.Error, expectedIndexPrefix) {
+			t.Errorf("Error at index %d should contain '%s', got: %s",
+				i, expectedIndexPrefix, err.Error)
 		}
 	}
 }

@@ -6,7 +6,11 @@ import (
 	"fmt"
 
 	"github.com/onlyspans/events/internal/domain"
+	"github.com/onlyspans/events/internal/ports"
 )
+
+// Compile-time check that SettingsRepository implements ports.SettingsRepository.
+var _ ports.SettingsRepository = (*SettingsRepository)(nil)
 
 // SettingsRepository handles settings data access operations.
 type SettingsRepository struct {

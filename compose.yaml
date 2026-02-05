@@ -33,7 +33,6 @@ services:
       - KAFKA_GROUP_ID=${KAFKA_GROUP_ID:-events-group}
 
       # Server configuration
-      - SERVER_PORT=8080
       - RETENTION_PERIOD_DAYS=${RETENTION_PERIOD_DAYS:-90}
       - RETENTION_CRON=${RETENTION_CRON:-0 2 * * *}
       - MAX_EXPORT_SIZE=${MAX_EXPORT_SIZE:-10000}

@@ -17,7 +17,7 @@ func TestEventIngestRequest_Validate(t *testing.T) {
 		{
 			name: "valid request with all required fields",
 			request: EventIngestRequest{
-				UserName: "test_user",
+				User:     "test_user",
 				Category: "test_category",
 				Action:   "test_action",
 			},
@@ -27,7 +27,7 @@ func TestEventIngestRequest_Validate(t *testing.T) {
 			name: "valid request with all fields",
 			request: EventIngestRequest{
 				Timestamp:     time.Now(),
-				UserName:      "test_user",
+				User:          "test_user",
 				Category:      "test_category",
 				Action:        "test_action",
 				DocumentName:  "test_doc",
@@ -41,29 +41,29 @@ func TestEventIngestRequest_Validate(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "missing user_name",
+			name: "missing user",
 			request: EventIngestRequest{
 				Category: "test_category",
 				Action:   "test_action",
 			},
 			wantErr: true,
-			errMsg:  "missing required field: user_name",
+			errMsg:  "missing required field: user",
 		},
 		{
-			name: "empty user_name",
+			name: "empty user",
 			request: EventIngestRequest{
-				UserName: "",
+				User:     "",
 				Category: "test_category",
 				Action:   "test_action",
 			},
 			wantErr: true,
-			errMsg:  "missing required field: user_name",
+			errMsg:  "missing required field: user",
 		},
 		{
 			name: "missing category",
 			request: EventIngestRequest{
-				UserName: "test_user",
-				Action:   "test_action",
+				User:   "test_user",
+				Action: "test_action",
 			},
 			wantErr: true,
 			errMsg:  "missing required field: category",
@@ -71,7 +71,7 @@ func TestEventIngestRequest_Validate(t *testing.T) {
 		{
 			name: "empty category",
 			request: EventIngestRequest{
-				UserName: "test_user",
+				User:     "test_user",
 				Category: "",
 				Action:   "test_action",
 			},
@@ -81,7 +81,7 @@ func TestEventIngestRequest_Validate(t *testing.T) {
 		{
 			name: "missing action",
 			request: EventIngestRequest{
-				UserName: "test_user",
+				User:     "test_user",
 				Category: "test_category",
 			},
 			wantErr: true,
@@ -90,7 +90,7 @@ func TestEventIngestRequest_Validate(t *testing.T) {
 		{
 			name: "empty action",
 			request: EventIngestRequest{
-				UserName: "test_user",
+				User:     "test_user",
 				Category: "test_category",
 				Action:   "",
 			},
@@ -103,7 +103,7 @@ func TestEventIngestRequest_Validate(t *testing.T) {
 				DocumentName: "test_doc",
 			},
 			wantErr: true,
-			errMsg:  "missing required field: user_name",
+			errMsg:  "missing required field: user",
 		},
 	}
 
@@ -136,7 +136,7 @@ func TestEventIngestRequest_ToEvent(t *testing.T) {
 		{
 			name: "converts required fields only",
 			request: EventIngestRequest{
-				UserName: "test_user",
+				User:     "test_user",
 				Category: "test_category",
 				Action:   "test_action",
 			},
@@ -159,7 +159,7 @@ func TestEventIngestRequest_ToEvent(t *testing.T) {
 			name: "converts all fields",
 			request: EventIngestRequest{
 				Timestamp:     timestamp,
-				UserName:      "test_user",
+				User:          "test_user",
 				Category:      "test_category",
 				Action:        "test_action",
 				DocumentName:  "test_doc",
@@ -199,7 +199,7 @@ func TestEventIngestRequest_ToEvent(t *testing.T) {
 		{
 			name: "converts details with known fields",
 			request: EventIngestRequest{
-				UserName: "test_user",
+				User:     "test_user",
 				Category: "test_category",
 				Action:   "test_action",
 				Details: map[string]interface{}{
@@ -226,7 +226,7 @@ func TestEventIngestRequest_ToEvent(t *testing.T) {
 		{
 			name: "converts details with changes",
 			request: EventIngestRequest{
-				UserName: "test_user",
+				User:     "test_user",
 				Category: "test_category",
 				Action:   "test_action",
 				Details: map[string]interface{}{
@@ -265,7 +265,7 @@ func TestEventIngestRequest_ToEvent(t *testing.T) {
 		{
 			name: "handles empty details map",
 			request: EventIngestRequest{
-				UserName: "test_user",
+				User:     "test_user",
 				Category: "test_category",
 				Action:   "test_action",
 				Details:  map[string]interface{}{},
@@ -279,7 +279,7 @@ func TestEventIngestRequest_ToEvent(t *testing.T) {
 		{
 			name: "handles nil details",
 			request: EventIngestRequest{
-				UserName: "test_user",
+				User:     "test_user",
 				Category: "test_category",
 				Action:   "test_action",
 				Details:  nil,
@@ -294,7 +294,7 @@ func TestEventIngestRequest_ToEvent(t *testing.T) {
 			name: "handles zero timestamp",
 			request: EventIngestRequest{
 				Timestamp: time.Time{},
-				UserName:  "test_user",
+				User:      "test_user",
 				Category:  "test_category",
 				Action:    "test_action",
 			},
@@ -322,12 +322,12 @@ func TestBatchIngestRequest(t *testing.T) {
 		req := BatchIngestRequest{
 			Events: []EventIngestRequest{
 				{
-					UserName: "user1",
+					User:     "user1",
 					Category: "cat1",
 					Action:   "action1",
 				},
 				{
-					UserName: "user2",
+					User:     "user2",
 					Category: "cat2",
 					Action:   "action2",
 				},
@@ -442,7 +442,7 @@ func TestEventIngestRequest_JSONMarshaling(t *testing.T) {
 		timestamp := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 		original := EventIngestRequest{
 			Timestamp:     timestamp,
-			UserName:      "test_user",
+			User:          "test_user",
 			Category:      "test_category",
 			Action:        "test_action",
 			DocumentName:  "test_doc",
@@ -459,21 +459,21 @@ func TestEventIngestRequest_JSONMarshaling(t *testing.T) {
 
 		// This would be handled by encoding/json in real HTTP handlers
 		// We're just verifying the struct tags are correct
-		if original.UserName != "test_user" {
-			t.Errorf("UserName = %v, want test_user", original.UserName)
+		if original.User != "test_user" {
+			t.Errorf("User = %v, want test_user", original.User)
 		}
 	})
 
 	t.Run("omitempty works for optional fields", func(t *testing.T) {
 		req := EventIngestRequest{
-			UserName: "test_user",
+			User:     "test_user",
 			Category: "test_category",
 			Action:   "test_action",
 		}
 
 		// Verify required fields are present
-		if req.UserName == "" {
-			t.Error("UserName should not be empty")
+		if req.User == "" {
+			t.Error("User should not be empty")
 		}
 		// Optional fields can be empty
 		if req.DocumentName != "" {
@@ -490,12 +490,12 @@ func TestBatchIngestRequest_JSONMarshaling(t *testing.T) {
 		batch := BatchIngestRequest{
 			Events: []EventIngestRequest{
 				{
-					UserName: "user1",
+					User:     "user1",
 					Category: "cat1",
 					Action:   "action1",
 				},
 				{
-					UserName: "user2",
+					User:     "user2",
 					Category: "cat2",
 					Action:   "action2",
 				},

@@ -11,10 +11,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/onlyspans/events/internal/domain"
 	"github.com/onlyspans/events/internal/dto"
-	"github.com/onlyspans/events/internal/repository"
+	"github.com/onlyspans/events/internal/ports"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
+
+var _ ports.EventService = (*EventService)(nil)
 
 var (
 	eventsIngestedCounter = promauto.NewCounter(prometheus.CounterOpts{
@@ -32,13 +34,6 @@ var (
 		Help: "Total number of events exported",
 	})
 )
-
-// EventRepository defines the interface for event data access.
-type EventRepository interface {
-	SaveBatch(ctx context.Context, events []*domain.Event) error
-	Search(ctx context.Context, query repository.SearchQuery) ([]*domain.Event, int64, error)
-	DeleteOlderThan(ctx context.Context, cutoffDate time.Time) (int64, error)
-}
 
 var (
 	eventsIngestSingleCounter = promauto.NewCounter(prometheus.CounterOpts{
@@ -59,12 +54,11 @@ var (
 
 // EventService handles event business logic.
 type EventService struct {
-	repo          EventRepository
+	repo          ports.EventRepository
 	maxExportSize int
 }
 
-// NewEventService creates a new EventService.
-func NewEventService(repo EventRepository, maxExportSize int) *EventService {
+func NewEventService(repo ports.EventRepository, maxExportSize int) *EventService {
 	return &EventService{
 		repo:          repo,
 		maxExportSize: maxExportSize,
@@ -112,7 +106,7 @@ func (s *EventService) SearchEvents(ctx context.Context, req dto.SearchEventsReq
 		req.Size = 20
 	}
 
-	query := repository.SearchQuery{
+	query := ports.EventSearchQuery{
 		User:          req.User,
 		Category:      req.Category,
 		Action:        req.Action,
@@ -164,7 +158,7 @@ func (s *EventService) ExportCSV(ctx context.Context, req dto.ExportEventsReques
 		req.SortOrder = "desc"
 	}
 
-	query := repository.SearchQuery{
+	query := ports.EventSearchQuery{
 		User:          req.User,
 		Category:      req.Category,
 		Action:        req.Action,
@@ -254,7 +248,7 @@ func (s *EventService) dtoToEntity(dto *dto.EventDTO) (*domain.Event, error) {
 		CreatedAt:     time.Now(),
 	}
 
-	// Parse ID if provided, otherwise generate new one
+	// Parse ID if provided, otherwise generate a new one
 	if dto.ID != "" {
 		id, err := uuid.Parse(dto.ID)
 		if err != nil {
@@ -267,7 +261,7 @@ func (s *EventService) dtoToEntity(dto *dto.EventDTO) (*domain.Event, error) {
 		event.ID = uuid.New()
 	}
 
-	// Set default timestamp if not provided
+	// Set the default timestamp if not provided
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now()
 	}
@@ -337,33 +331,39 @@ func (s *EventService) entityToDTO(entity *domain.Event) dto.EventDTO {
 	return eventDTO
 }
 
-// CreateEvent creates a single event from an HTTP ingestion request.
-// It validates the request, sets default values for ID and timestamp,
-// and persists the event to the repository.
-func (s *EventService) CreateEvent(ctx context.Context, req dto.EventIngestRequest) (uuid.UUID, error) {
-	// Validate the request
+// processIngestRequest validates and converts an EventIngestRequest to a domain.Event.
+// It sets default values for ID, timestamp, and created_at if not provided.
+// Returns the prepared event or an error if validation fails.
+func (s *EventService) processIngestRequest(req dto.EventIngestRequest) (*domain.Event, error) {
 	if err := req.Validate(); err != nil {
-		eventsIngestFailedCounter.Inc()
-		return uuid.Nil, fmt.Errorf("validation failed: %w", err)
+		return nil, fmt.Errorf("validation failed: %w", err)
 	}
 
-	// Convert to domain event
 	event := req.ToEvent()
 
-	// Set ID if not already set
 	if event.ID == uuid.Nil {
 		event.ID = uuid.New()
 	}
 
-	// Set timestamp to now if not provided
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now()
 	}
 
-	// Set created_at timestamp
 	event.CreatedAt = time.Now()
 
-	// Persist to repository using batch method with single event
+	return event, nil
+}
+
+// CreateEvent creates a single event from an HTTP ingestion request.
+// It validates the request, sets default values for ID and timestamp,
+// and persists the event to the repository.
+func (s *EventService) CreateEvent(ctx context.Context, req dto.EventIngestRequest) (uuid.UUID, error) {
+	event, err := s.processIngestRequest(req)
+	if err != nil {
+		eventsIngestFailedCounter.Inc()
+		return uuid.Nil, err
+	}
+
 	if err := s.repo.SaveBatch(ctx, []*domain.Event{event}); err != nil {
 		eventsIngestFailedCounter.Inc()
 		return uuid.Nil, fmt.Errorf("failed to save event: %w", err)
@@ -383,41 +383,23 @@ func (s *EventService) CreateEventsBatch(ctx context.Context, requests []dto.Eve
 		Errors:       []dto.BatchError{},
 	}
 
-	// Process each event individually to support partial success
 	for i, req := range requests {
-		// Validate the request
-		if err := req.Validate(); err != nil {
+		event, err := s.processIngestRequest(req)
+		if err != nil {
 			response.FailureCount++
 			response.Errors = append(response.Errors, dto.BatchError{
 				Index: i,
-				Error: fmt.Sprintf("validation failed: %v", err),
+				Error: fmt.Sprintf("event %d: %v", i, err),
 			})
 			eventsIngestFailedCounter.Inc()
 			continue
 		}
 
-		// Convert to domain event
-		event := req.ToEvent()
-
-		// Set ID if not already set
-		if event.ID == uuid.Nil {
-			event.ID = uuid.New()
-		}
-
-		// Set timestamp to now if not provided
-		if event.Timestamp.IsZero() {
-			event.Timestamp = time.Now()
-		}
-
-		// Set created_at timestamp
-		event.CreatedAt = time.Now()
-
-		// Persist to repository
 		if err := s.repo.SaveBatch(ctx, []*domain.Event{event}); err != nil {
 			response.FailureCount++
 			response.Errors = append(response.Errors, dto.BatchError{
 				Index: i,
-				Error: fmt.Sprintf("failed to save event: %v", err),
+				Error: fmt.Sprintf("event %d: failed to save: %v", i, err),
 			})
 			eventsIngestFailedCounter.Inc()
 			continue

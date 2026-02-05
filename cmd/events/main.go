@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -14,6 +15,8 @@ import (
 	"github.com/onlyspans/events/internal/config"
 	"github.com/onlyspans/events/internal/consumer"
 	"github.com/onlyspans/events/internal/handler"
+	"github.com/onlyspans/events/internal/http/middleware"
+	"github.com/onlyspans/events/internal/http/response"
 	"github.com/onlyspans/events/internal/migrator"
 	"github.com/onlyspans/events/internal/repository"
 	"github.com/onlyspans/events/internal/service"
@@ -37,6 +40,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		logger.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
+
 	// Log feature flags status
 	logger.Info("feature flags",
 		"kafka_enabled", cfg.Features.KafkaEnabled,
@@ -52,9 +61,9 @@ func main() {
 	defer db.Close()
 
 	// Configure connection pool
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetMaxOpenConns(cfg.Database.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.Database.MaxIdleConns)
+	db.SetConnMaxLifetime(cfg.Database.ConnMaxLifetime)
 
 	// Test database connection
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -99,7 +108,8 @@ func main() {
 	// Initialize handlers
 	eventHandler := handler.NewEventHandler(eventService, logger)
 	settingsHandler := handler.NewSettingsHandler(settingsService, logger)
-	healthHandler := handler.NewHealthHandler(db, logger)
+	healthChecker := handler.NewDBHealthChecker(db)
+	healthHandler := handler.NewHealthHandler(healthChecker, logger)
 
 	// Setup HTTP routes
 	mux := http.NewServeMux()
@@ -118,21 +128,23 @@ func main() {
 		case http.MethodPut:
 			settingsHandler.UpdateSettings(w, r)
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			response.MethodNotAllowed(w)
 		}
 	})
 
-	// Health routes
 	mux.HandleFunc("/readyz", healthHandler.Readiness)
 	mux.HandleFunc("/healthz", healthHandler.Liveness)
 
-	// Metrics route
 	mux.Handle("/metrics", promhttp.Handler())
 
-	// Create HTTP server
+	chain := middleware.Chain(
+		middleware.Recovery(logger),
+		middleware.Logging(logger),
+	)
+
 	server := &http.Server{
-		Addr:         ":" + cfg.Server.Port,
-		Handler:      loggingMiddleware(mux, logger),
+		Addr:         ":8080",
+		Handler:      chain(mux),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -147,8 +159,8 @@ func main() {
 
 	// Start HTTP server in errgroup
 	g.Go(func() error {
-		logger.Info("starting HTTP server", "port", cfg.Server.Port)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Info("starting HTTP server", "port", "8080")
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("HTTP server error", "error", err)
 			return err
 		}
@@ -224,34 +236,4 @@ func main() {
 	}
 
 	logger.Info("service stopped gracefully")
-}
-
-// loggingMiddleware logs HTTP requests.
-func loggingMiddleware(next http.Handler, logger *slog.Logger) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-
-		// Wrap response writer to capture status code
-		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-
-		next.ServeHTTP(wrapped, r)
-
-		logger.Info("http request",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", wrapped.statusCode,
-			"duration", time.Since(start),
-			"remote_addr", r.RemoteAddr,
-		)
-	})
-}
-
-type responseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
 }

@@ -7,18 +7,21 @@ import (
 
 	"github.com/onlyspans/events/internal/domain"
 	"github.com/onlyspans/events/internal/dto"
-	"github.com/onlyspans/events/internal/repository"
+	"github.com/onlyspans/events/internal/ports"
 )
+
+// Compile-time check that SettingsService implements ports.SettingsService.
+var _ ports.SettingsService = (*SettingsService)(nil)
 
 // SettingsService handles settings business logic.
 type SettingsService struct {
-	repo                 *repository.SettingsRepository
+	repo                 ports.SettingsRepository
 	defaultRetentionDays int
 	defaultMaxExportSize int
 }
 
 // NewSettingsService creates a new SettingsService.
-func NewSettingsService(repo *repository.SettingsRepository, defaultRetentionDays, defaultMaxExportSize int) *SettingsService {
+func NewSettingsService(repo ports.SettingsRepository, defaultRetentionDays, defaultMaxExportSize int) *SettingsService {
 	return &SettingsService{
 		repo:                 repo,
 		defaultRetentionDays: defaultRetentionDays,
