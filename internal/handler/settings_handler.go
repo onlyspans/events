@@ -6,17 +6,17 @@ import (
 	"net/http"
 
 	"github.com/onlyspans/events/internal/dto"
-	"github.com/onlyspans/events/internal/service"
+	"github.com/onlyspans/events/internal/ports"
 )
 
 // SettingsHandler handles HTTP requests for settings.
 type SettingsHandler struct {
-	settingsService *service.SettingsService
+	settingsService ports.SettingsService
 	logger          *slog.Logger
 }
 
 // NewSettingsHandler creates a new SettingsHandler.
-func NewSettingsHandler(settingsService *service.SettingsService, logger *slog.Logger) *SettingsHandler {
+func NewSettingsHandler(settingsService ports.SettingsService, logger *slog.Logger) *SettingsHandler {
 	return &SettingsHandler{
 		settingsService: settingsService,
 		logger:          logger,

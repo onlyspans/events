@@ -105,17 +105,18 @@ Define structured error types for consistent error handling.
 
 ---
 
-### [ ] Step: Refactor Handlers to Use Interfaces
+### [x] Step: Refactor Handlers to Use Interfaces
+<!-- chat-id: 50d3fbd4-20f4-4a07-997b-4acd6eb90795 -->
 
 Update handlers to depend on interfaces instead of concrete types.
 
 **Tasks:**
-- [ ] Update `EventHandler` to accept `ports.EventService` interface
-- [ ] Update `SettingsHandler` to accept `ports.SettingsService` interface
-- [ ] Update `HealthHandler` to accept `ports.HealthChecker` interface
-- [ ] Create a `DBHealthChecker` adapter wrapping `*sql.DB`
-- [ ] Update `cmd/events/main.go` to wire interfaces
-- [ ] Run existing tests to verify no regressions
+- [x] Update `EventHandler` to accept `ports.EventService` interface
+- [x] Update `SettingsHandler` to accept `ports.SettingsService` interface
+- [x] Update `HealthHandler` to accept `ports.HealthChecker` interface
+- [x] Create a `DBHealthChecker` adapter wrapping `*sql.DB`
+- [x] Update `cmd/events/main.go` to wire interfaces
+- [x] Run existing tests to verify no regressions
 
 **Files:**
 - Modify: `internal/handler/event_handler.go`

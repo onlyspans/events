@@ -1,23 +1,24 @@
 package handler
 
 import (
-	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"net/http"
+
+	"github.com/onlyspans/events/internal/ports"
 )
 
 // HealthHandler handles health check requests.
 type HealthHandler struct {
-	db     *sql.DB
-	logger *slog.Logger
+	healthChecker ports.HealthChecker
+	logger        *slog.Logger
 }
 
 // NewHealthHandler creates a new HealthHandler.
-func NewHealthHandler(db *sql.DB, logger *slog.Logger) *HealthHandler {
+func NewHealthHandler(healthChecker ports.HealthChecker, logger *slog.Logger) *HealthHandler {
 	return &HealthHandler{
-		db:     db,
-		logger: logger,
+		healthChecker: healthChecker,
+		logger:        logger,
 	}
 }
 
@@ -31,7 +32,7 @@ func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 	health := make(map[string]interface{})
 
 	// Check database connection
-	if err := h.db.Ping(); err != nil {
+	if err := h.healthChecker.Ping(r.Context()); err != nil {
 		h.logger.Error("database health check failed", "error", err)
 		health["status"] = "DOWN"
 		health["database"] = "disconnected"

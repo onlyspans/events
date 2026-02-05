@@ -106,7 +106,8 @@ func main() {
 	// Initialize handlers
 	eventHandler := handler.NewEventHandler(eventService, logger)
 	settingsHandler := handler.NewSettingsHandler(settingsService, logger)
-	healthHandler := handler.NewHealthHandler(db, logger)
+	healthChecker := handler.NewDBHealthChecker(db)
+	healthHandler := handler.NewHealthHandler(healthChecker, logger)
 
 	// Setup HTTP routes
 	mux := http.NewServeMux()

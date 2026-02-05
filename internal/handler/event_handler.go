@@ -9,17 +9,17 @@ import (
 	"time"
 
 	"github.com/onlyspans/events/internal/dto"
-	"github.com/onlyspans/events/internal/service"
+	"github.com/onlyspans/events/internal/ports"
 )
 
 // EventHandler handles HTTP requests for events.
 type EventHandler struct {
-	eventService *service.EventService
+	eventService ports.EventService
 	logger       *slog.Logger
 }
 
 // NewEventHandler creates a new EventHandler.
-func NewEventHandler(eventService *service.EventService, logger *slog.Logger) *EventHandler {
+func NewEventHandler(eventService ports.EventService, logger *slog.Logger) *EventHandler {
 	return &EventHandler{
 		eventService: eventService,
 		logger:       logger,
