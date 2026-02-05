@@ -368,9 +368,11 @@ func validConfig() *Config {
 			ConnMaxLifetime: 5 * time.Minute,
 		},
 		Kafka: KafkaConfig{
-			Brokers: "localhost:9092",
-			Topic:   "events",
-			GroupID: "events-group",
+			Brokers:      "localhost:9092",
+			Topic:        "events",
+			GroupID:      "events-group",
+			BatchSize:    100,
+			BatchTimeout: 500 * time.Millisecond,
 		},
 		EventLog: EventLogConfig{
 			RetentionPeriodDays: 90,
@@ -460,6 +462,78 @@ func TestConfig_Validate_KafkaEnabled(t *testing.T) {
 					t.Error("Validate() should return error")
 				} else if !strings.Contains(err.Error(), tt.errContains) {
 					t.Errorf("error should contain %q, got: %v", tt.errContains, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Validate() returned unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestConfig_Validate_KafkaBatchSize(t *testing.T) {
+	tests := []struct {
+		name    string
+		size    int
+		wantErr bool
+	}{
+		{"valid minimum", 1, false},
+		{"valid middle", 100, false},
+		{"valid maximum", 1000, false},
+		{"too low", 0, true},
+		{"negative", -1, true},
+		{"too high", 1001, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig()
+			cfg.Features.KafkaEnabled = true
+			cfg.Kafka.BatchSize = tt.size
+
+			err := cfg.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Validate() should return error")
+				} else if !strings.Contains(err.Error(), "KAFKA_BATCH_SIZE") {
+					t.Errorf("error should mention KAFKA_BATCH_SIZE, got: %v", err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Validate() returned unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestConfig_Validate_KafkaBatchTimeout(t *testing.T) {
+	tests := []struct {
+		name    string
+		timeout time.Duration
+		wantErr bool
+	}{
+		{"valid minimum", 100 * time.Millisecond, false},
+		{"valid middle", 500 * time.Millisecond, false},
+		{"valid maximum", 30 * time.Second, false},
+		{"too low", 50 * time.Millisecond, true},
+		{"zero", 0, true},
+		{"too high", 31 * time.Second, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig()
+			cfg.Features.KafkaEnabled = true
+			cfg.Kafka.BatchTimeout = tt.timeout
+
+			err := cfg.Validate()
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Validate() should return error")
+				} else if !strings.Contains(err.Error(), "KAFKA_BATCH_TIMEOUT_MS") {
+					t.Errorf("error should mention KAFKA_BATCH_TIMEOUT_MS, got: %v", err)
 				}
 			} else {
 				if err != nil {
