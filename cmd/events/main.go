@@ -16,6 +16,7 @@ import (
 	"github.com/onlyspans/events/internal/consumer"
 	"github.com/onlyspans/events/internal/handler"
 	"github.com/onlyspans/events/internal/http/middleware"
+	"github.com/onlyspans/events/internal/http/response"
 	"github.com/onlyspans/events/internal/migrator"
 	"github.com/onlyspans/events/internal/repository"
 	"github.com/onlyspans/events/internal/service"
@@ -127,7 +128,7 @@ func main() {
 		case http.MethodPut:
 			settingsHandler.UpdateSettings(w, r)
 		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			response.MethodNotAllowed(w)
 		}
 	})
 

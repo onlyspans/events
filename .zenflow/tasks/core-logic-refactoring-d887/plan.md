@@ -158,21 +158,23 @@ Extract common HTTP patterns into reusable middleware and helpers.
 
 ---
 
-### [ ] Step: Simplify Handler Methods
+### [x] Step: Simplify Handler Methods
+<!-- chat-id: 38d29ade-66e8-4f38-8e5a-7a2c0e53ea45 -->
 
 Remove boilerplate from handlers using the new helpers.
 
 **Tasks:**
-- [ ] Remove duplicate method validation (handlers already route by method in main.go)
-- [ ] Use response helpers for JSON encoding
-- [ ] Use structured error responses from `apperr` package
-- [ ] Simplify context timeout patterns
-- [ ] Update handler tests if needed
+- [x] Remove duplicate method validation (handlers already route by method in main.go)
+- [x] Use response helpers for JSON encoding
+- [x] Use structured error responses from `apperr` package
+- [x] Simplify context timeout patterns
+- [x] Update handler tests if needed
 
 **Files:**
 - Modify: `internal/handler/event_handler.go`
 - Modify: `internal/handler/settings_handler.go`
 - Modify: `internal/handler/health_handler.go`
+- Modify: `cmd/events/main.go`
 
 **Verification:** `go test -race ./internal/handler/...`
 
