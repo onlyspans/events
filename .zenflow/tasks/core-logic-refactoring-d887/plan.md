@@ -129,19 +129,20 @@ Update handlers to depend on interfaces instead of concrete types.
 
 ---
 
-### [ ] Step: Create HTTP Middleware and Response Helpers
+### [x] Step: Create HTTP Middleware and Response Helpers
+<!-- chat-id: cb26099b-ffee-4b1b-88a3-d1d463a2ca76 -->
 
 Extract common HTTP patterns into reusable middleware and helpers.
 
 **Tasks:**
-- [ ] Create `internal/http/middleware/logging.go` - request logging middleware
-- [ ] Create `internal/http/middleware/recovery.go` - panic recovery middleware
-- [ ] Create `internal/http/middleware/chain.go` - middleware chaining utility
-- [ ] Create `internal/http/response/response.go` - JSON response helpers
-- [ ] Create `internal/http/response/errors.go` - error response formatting
-- [ ] Move logging middleware from `main.go` to new package
-- [ ] Write unit tests for middleware and response helpers
-- [ ] Update `main.go` to use the new middleware chain
+- [x] Create `internal/http/middleware/logging.go` - request logging middleware
+- [x] Create `internal/http/middleware/recovery.go` - panic recovery middleware
+- [x] Create `internal/http/middleware/chain.go` - middleware chaining utility
+- [x] Create `internal/http/response/response.go` - JSON response helpers
+- [x] Create `internal/http/response/errors.go` - error response formatting
+- [x] Move logging middleware from `main.go` to new package
+- [x] Write unit tests for middleware and response helpers
+- [x] Update `main.go` to use the new middleware chain
 
 **Files:**
 - Create: `internal/http/middleware/logging.go`

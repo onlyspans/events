@@ -15,6 +15,7 @@ import (
 	"github.com/onlyspans/events/internal/config"
 	"github.com/onlyspans/events/internal/consumer"
 	"github.com/onlyspans/events/internal/handler"
+	"github.com/onlyspans/events/internal/http/middleware"
 	"github.com/onlyspans/events/internal/migrator"
 	"github.com/onlyspans/events/internal/repository"
 	"github.com/onlyspans/events/internal/service"
@@ -135,9 +136,15 @@ func main() {
 
 	mux.Handle("/metrics", promhttp.Handler())
 
+	// Create middleware chain: recovery (outermost) -> logging
+	chain := middleware.Chain(
+		middleware.Recovery(logger),
+		middleware.Logging(logger),
+	)
+
 	server := &http.Server{
 		Addr:         ":8080",
-		Handler:      loggingMiddleware(mux, logger),
+		Handler:      chain(mux),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
@@ -229,34 +236,4 @@ func main() {
 	}
 
 	logger.Info("service stopped gracefully")
-}
-
-// loggingMiddleware logs HTTP requests.
-func loggingMiddleware(next http.Handler, logger *slog.Logger) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-
-		// Wrap response writer to capture status code
-		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-
-		next.ServeHTTP(wrapped, r)
-
-		logger.Info("http request",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", wrapped.statusCode,
-			"duration", time.Since(start),
-			"remote_addr", r.RemoteAddr,
-		)
-	})
-}
-
-type responseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
 }
