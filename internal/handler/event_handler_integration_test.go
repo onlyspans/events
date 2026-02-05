@@ -89,7 +89,7 @@ func TestEventHandler_IngestEvent(t *testing.T) {
 		{
 			name: "valid event",
 			requestBody: dto.EventIngestRequest{
-				UserName: "test-user",
+				User:     "test-user",
 				Category: "test-category",
 				Action:   "test-action",
 				Project:  "test-project",
@@ -108,7 +108,7 @@ func TestEventHandler_IngestEvent(t *testing.T) {
 		{
 			name: "missing required field",
 			requestBody: dto.EventIngestRequest{
-				UserName: "test-user",
+				User:     "test-user",
 				Category: "test-category",
 				// Missing Action
 			},
@@ -179,12 +179,12 @@ func TestEventHandler_IngestEventsBatch(t *testing.T) {
 			requestBody: dto.BatchIngestRequest{
 				Events: []dto.EventIngestRequest{
 					{
-						UserName: "user1",
+						User:     "user1",
 						Category: "category1",
 						Action:   "action1",
 					},
 					{
-						UserName: "user2",
+						User:     "user2",
 						Category: "category2",
 						Action:   "action2",
 					},
@@ -209,12 +209,12 @@ func TestEventHandler_IngestEventsBatch(t *testing.T) {
 			requestBody: dto.BatchIngestRequest{
 				Events: []dto.EventIngestRequest{
 					{
-						UserName: "user1",
+						User:     "user1",
 						Category: "category1",
 						Action:   "action1",
 					},
 					{
-						UserName: "user2",
+						User:     "user2",
 						Category: "category2",
 						// Missing Action - validation error
 					},
@@ -243,7 +243,7 @@ func TestEventHandler_IngestEventsBatch(t *testing.T) {
 				events := make([]dto.EventIngestRequest, 101)
 				for i := range events {
 					events[i] = dto.EventIngestRequest{
-						UserName: "user",
+						User:     "user",
 						Category: "category",
 						Action:   "action",
 					}

@@ -39,8 +39,9 @@ type ChangeDTO struct {
 	NewValue string `json:"newValue,omitempty"`
 }
 
-// SearchEventsRequest represents the search request parameters.
-type SearchEventsRequest struct {
+// EventFilterRequest contains common filter fields for event queries.
+// It is embedded by SearchEventsRequest and aliased by ExportEventsRequest.
+type EventFilterRequest struct {
 	User          string     `json:"user,omitempty"`
 	Category      string     `json:"category,omitempty"`
 	Action        string     `json:"action,omitempty"`
@@ -54,26 +55,20 @@ type SearchEventsRequest struct {
 	EndDate       *time.Time `json:"endDate,omitempty"`
 	SortBy        string     `json:"sortBy,omitempty"`
 	SortOrder     string     `json:"sortOrder,omitempty"`
-	Page          int        `json:"page,omitempty"`
-	Size          int        `json:"size,omitempty"`
+}
+
+// SearchEventsRequest represents the search request parameters.
+// It embeds EventFilterRequest and adds pagination fields.
+type SearchEventsRequest struct {
+	EventFilterRequest
+	Page int `json:"page,omitempty"`
+	Size int `json:"size,omitempty"`
 }
 
 // ExportEventsRequest represents the export request parameters.
-type ExportEventsRequest struct {
-	User          string     `json:"user,omitempty"`
-	Category      string     `json:"category,omitempty"`
-	Action        string     `json:"action,omitempty"`
-	Document      string     `json:"document,omitempty"`
-	Project       string     `json:"project,omitempty"`
-	Environment   string     `json:"environment,omitempty"`
-	Tenant        string     `json:"tenant,omitempty"`
-	CorrelationID string     `json:"correlationId,omitempty"`
-	TraceID       string     `json:"traceId,omitempty"`
-	StartDate     *time.Time `json:"startDate,omitempty"`
-	EndDate       *time.Time `json:"endDate,omitempty"`
-	SortBy        string     `json:"sortBy,omitempty"`
-	SortOrder     string     `json:"sortOrder,omitempty"`
-}
+// It is an alias for EventFilterRequest since exports use the same filters
+// without pagination (the export size is controlled by service configuration).
+type ExportEventsRequest = EventFilterRequest
 
 // QueryResult represents the search results with pagination.
 type QueryResult struct {
@@ -87,7 +82,7 @@ type QueryResult struct {
 // EventIngestRequest represents a request to ingest a single event via HTTP.
 type EventIngestRequest struct {
 	Timestamp     time.Time              `json:"timestamp"`
-	UserName      string                 `json:"user_name"`
+	User          string                 `json:"user"`
 	Category      string                 `json:"category"`
 	Action        string                 `json:"action"`
 	DocumentName  string                 `json:"document_name,omitempty"`
@@ -101,8 +96,8 @@ type EventIngestRequest struct {
 
 // Validate checks that all required fields are present and non-empty.
 func (e *EventIngestRequest) Validate() error {
-	if e.UserName == "" {
-		return fmt.Errorf("missing required field: user_name")
+	if e.User == "" {
+		return fmt.Errorf("missing required field: user")
 	}
 	if e.Category == "" {
 		return fmt.Errorf("missing required field: category")
@@ -155,7 +150,7 @@ func (e *EventIngestRequest) ToEvent() *domain.Event {
 
 	return &domain.Event{
 		Timestamp:     e.Timestamp,
-		User:          e.UserName,
+		User:          e.User,
 		Category:      e.Category,
 		Action:        e.Action,
 		DocumentName:  e.DocumentName,

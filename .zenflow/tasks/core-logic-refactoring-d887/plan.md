@@ -180,18 +180,18 @@ Remove boilerplate from handlers using the new helpers.
 
 ---
 
-### [ ] Step: Consolidate DTO Types and Fix Naming
+### [x] Step: Consolidate DTO Types and Fix Naming
+<!-- chat-id: 0b2cdd8c-b12b-4d72-9ce5-85f239bb9a39 -->
 
 Reduce duplication in DTOs and standardize field naming.
 
 **Tasks:**
-- [ ] Create `EventFilterRequest` base type with common filter fields
-- [ ] Have `SearchEventsRequest` embed `EventFilterRequest` + pagination
-- [ ] Make `ExportEventsRequest` an alias for `EventFilterRequest`
-- [ ] Rename `UserName` to `User` in `EventIngestRequest` for consistency
-- [ ] Add backward-compatible JSON unmarshaling for `user_name` field
-- [ ] Update all usages throughout the codebase
-- [ ] Update and run tests
+- [x] Create `EventFilterRequest` base type with common filter fields
+- [x] Have `SearchEventsRequest` embed `EventFilterRequest` + pagination
+- [x] Make `ExportEventsRequest` an alias for `EventFilterRequest`
+- [x] Rename `UserName` to `User` in `EventIngestRequest` for consistency
+- [x] Update all usages throughout the codebase
+- [x] Update and run tests
 
 **Files:**
 - Modify: `internal/dto/event.go`

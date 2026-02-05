@@ -115,7 +115,7 @@ func (h *EventHandler) IngestEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Debug("ingest event request", "user", req.UserName, "category", req.Category, "action", req.Action)
+	h.logger.Debug("ingest event request", "user", req.User, "category", req.Category, "action", req.Action)
 
 	ctx, cancel := context.WithTimeout(r.Context(), ingestTimeout)
 	defer cancel()
