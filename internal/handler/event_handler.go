@@ -18,7 +18,6 @@ type EventHandler struct {
 	logger       *slog.Logger
 }
 
-// NewEventHandler creates a new EventHandler.
 func NewEventHandler(eventService ports.EventService, logger *slog.Logger) *EventHandler {
 	return &EventHandler{
 		eventService: eventService,
@@ -96,7 +95,6 @@ func (h *EventHandler) ExportEvents(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.eventService.ExportCSV(ctx, req, w); err != nil {
 		h.logger.Error("failed to export events", "error", err)
-		// Can't send error response after headers are written
 		return
 	}
 }
@@ -117,7 +115,6 @@ func (h *EventHandler) IngestEvent(w http.ResponseWriter, r *http.Request) {
 
 	h.logger.Debug("ingest event request", "user", req.UserName, "category", req.Category, "action", req.Action)
 
-	// Add context timeout for single event ingestion (5 seconds)
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
@@ -151,7 +148,6 @@ func (h *EventHandler) IngestEventsBatch(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Enforce batch size limit (max 100 events)
 	const maxBatchSize = 100
 	if len(req.Events) > maxBatchSize {
 		h.logger.Warn("batch size exceeds maximum", "requested", len(req.Events), "max", maxBatchSize)
@@ -167,7 +163,6 @@ func (h *EventHandler) IngestEventsBatch(w http.ResponseWriter, r *http.Request)
 
 	h.logger.Debug("batch ingest request", "count", len(req.Events))
 
-	// Add context timeout for batch ingestion (30 seconds)
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
 
@@ -178,7 +173,6 @@ func (h *EventHandler) IngestEventsBatch(w http.ResponseWriter, r *http.Request)
 		"failed", response.FailureCount,
 		"total", len(req.Events))
 
-	// Return 207 Multi-Status for partial success scenarios
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusMultiStatus)
 	if err := json.NewEncoder(w).Encode(response); err != nil {

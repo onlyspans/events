@@ -15,7 +15,6 @@ type SettingsHandler struct {
 	logger          *slog.Logger
 }
 
-// NewSettingsHandler creates a new SettingsHandler.
 func NewSettingsHandler(settingsService ports.SettingsService, logger *slog.Logger) *SettingsHandler {
 	return &SettingsHandler{
 		settingsService: settingsService,

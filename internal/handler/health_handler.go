@@ -14,7 +14,6 @@ type HealthHandler struct {
 	logger        *slog.Logger
 }
 
-// NewHealthHandler creates a new HealthHandler.
 func NewHealthHandler(healthChecker ports.HealthChecker, logger *slog.Logger) *HealthHandler {
 	return &HealthHandler{
 		healthChecker: healthChecker,
