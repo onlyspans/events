@@ -85,16 +85,17 @@ Add validation to catch configuration errors at startup.
 
 ---
 
-### [ ] Step: Create Application Error Types
+### [x] Step: Create Application Error Types
+<!-- chat-id: 0738c87e-74cb-47cb-ac90-cf26dc8b071e -->
 
 Define structured error types for consistent error handling.
 
 **Tasks:**
-- [ ] Create `internal/apperr/errors.go` with `AppError` type
-- [ ] Define error codes/types (validation, not found, internal)
-- [ ] Add helper constructors (`NewValidationError`, `NewInternalError`)
-- [ ] Add error wrapping support
-- [ ] Write unit tests for error types
+- [x] Create `internal/apperr/errors.go` with `AppError` type
+- [x] Define error codes/types (validation, not found, internal)
+- [x] Add helper constructors (`NewValidationError`, `NewInternalError`)
+- [x] Add error wrapping support
+- [x] Write unit tests for error types
 
 **Files:**
 - Create: `internal/apperr/errors.go`
