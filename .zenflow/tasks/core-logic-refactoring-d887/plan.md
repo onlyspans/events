@@ -38,16 +38,17 @@ Create a technical specification for the task that is appropriate for the comple
 
 ---
 
-### [ ] Step: Define Interfaces and Ports
+### [x] Step: Define Interfaces and Ports
+<!-- chat-id: 6ecf2832-4388-47ad-8c1c-9de208a4c239 -->
 
 Create the interface abstractions that will decouple the layers.
 
 **Tasks:**
-- [ ] Create `internal/ports/repositories.go` with `EventRepository`, `SettingsRepository`, and `HealthChecker` interfaces
-- [ ] Create `internal/ports/services.go` with `EventService` and `SettingsService` interfaces
-- [ ] Add interface documentation explaining the contract
-- [ ] Ensure existing implementations satisfy the interfaces (compile-time checks)
-- [ ] Run tests to verify no regressions
+- [x] Create `internal/ports/repositories.go` with `EventRepository`, `SettingsRepository`, and `HealthChecker` interfaces
+- [x] Create `internal/ports/services.go` with `EventService` and `SettingsService` interfaces
+- [x] Add interface documentation explaining the contract
+- [x] Ensure existing implementations satisfy the interfaces (compile-time checks)
+- [x] Run tests to verify no regressions
 
 **Files:**
 - Create: `internal/ports/repositories.go`

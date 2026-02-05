@@ -10,6 +10,7 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/onlyspans/events/internal/domain"
 	"github.com/onlyspans/events/internal/migrator"
+	"github.com/onlyspans/events/internal/ports"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -389,14 +390,14 @@ func TestEventRepository_Search(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		query       SearchQuery
+		query       ports.EventSearchQuery
 		wantCount   int
 		wantTotal   int64
 		checkResult func(t *testing.T, events []*domain.Event)
 	}{
 		{
 			name: "search by user",
-			query: SearchQuery{
+			query: ports.EventSearchQuery{
 				User: "user1",
 				Page: 0,
 				Size: 10,
@@ -413,7 +414,7 @@ func TestEventRepository_Search(t *testing.T) {
 		},
 		{
 			name: "search by category",
-			query: SearchQuery{
+			query: ports.EventSearchQuery{
 				Category: "category1",
 				Page:     0,
 				Size:     10,
@@ -423,7 +424,7 @@ func TestEventRepository_Search(t *testing.T) {
 		},
 		{
 			name: "search by project and environment",
-			query: SearchQuery{
+			query: ports.EventSearchQuery{
 				Project:     "project1",
 				Environment: "production",
 				Page:        0,
@@ -434,7 +435,7 @@ func TestEventRepository_Search(t *testing.T) {
 		},
 		{
 			name: "search with pagination",
-			query: SearchQuery{
+			query: ports.EventSearchQuery{
 				Page: 0,
 				Size: 1,
 			},
@@ -443,7 +444,7 @@ func TestEventRepository_Search(t *testing.T) {
 		},
 		{
 			name: "search all",
-			query: SearchQuery{
+			query: ports.EventSearchQuery{
 				Page: 0,
 				Size: 10,
 			},
@@ -525,7 +526,7 @@ func TestEventRepository_DeleteOlderThan(t *testing.T) {
 	}
 
 	// Verify remaining events
-	events, total, err := repo.Search(ctx, SearchQuery{Page: 0, Size: 10})
+	events, total, err := repo.Search(ctx, ports.EventSearchQuery{Page: 0, Size: 10})
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
 	}

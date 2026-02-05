@@ -11,10 +11,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/onlyspans/events/internal/domain"
 	"github.com/onlyspans/events/internal/dto"
-	"github.com/onlyspans/events/internal/repository"
+	"github.com/onlyspans/events/internal/ports"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
+
+// Compile-time check that EventService implements ports.EventService.
+var _ ports.EventService = (*EventService)(nil)
 
 var (
 	eventsIngestedCounter = promauto.NewCounter(prometheus.CounterOpts{
@@ -32,13 +35,6 @@ var (
 		Help: "Total number of events exported",
 	})
 )
-
-// EventRepository defines the interface for event data access.
-type EventRepository interface {
-	SaveBatch(ctx context.Context, events []*domain.Event) error
-	Search(ctx context.Context, query repository.SearchQuery) ([]*domain.Event, int64, error)
-	DeleteOlderThan(ctx context.Context, cutoffDate time.Time) (int64, error)
-}
 
 var (
 	eventsIngestSingleCounter = promauto.NewCounter(prometheus.CounterOpts{
@@ -59,12 +55,12 @@ var (
 
 // EventService handles event business logic.
 type EventService struct {
-	repo          EventRepository
+	repo          ports.EventRepository
 	maxExportSize int
 }
 
 // NewEventService creates a new EventService.
-func NewEventService(repo EventRepository, maxExportSize int) *EventService {
+func NewEventService(repo ports.EventRepository, maxExportSize int) *EventService {
 	return &EventService{
 		repo:          repo,
 		maxExportSize: maxExportSize,
@@ -112,7 +108,7 @@ func (s *EventService) SearchEvents(ctx context.Context, req dto.SearchEventsReq
 		req.Size = 20
 	}
 
-	query := repository.SearchQuery{
+	query := ports.EventSearchQuery{
 		User:          req.User,
 		Category:      req.Category,
 		Action:        req.Action,
@@ -164,7 +160,7 @@ func (s *EventService) ExportCSV(ctx context.Context, req dto.ExportEventsReques
 		req.SortOrder = "desc"
 	}
 
-	query := repository.SearchQuery{
+	query := ports.EventSearchQuery{
 		User:          req.User,
 		Category:      req.Category,
 		Action:        req.Action,

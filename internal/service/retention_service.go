@@ -6,12 +6,13 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/onlyspans/events/internal/ports"
 	"github.com/robfig/cron/v3"
 )
 
 // RetentionService handles scheduled deletion of old events.
 type RetentionService struct {
-	eventRepo       EventRepository
+	eventRepo       ports.EventRepository
 	settingsService *SettingsService
 	cron            *cron.Cron
 	logger          *slog.Logger
@@ -19,7 +20,7 @@ type RetentionService struct {
 
 // NewRetentionService creates a new RetentionService.
 func NewRetentionService(
-	eventRepo EventRepository,
+	eventRepo ports.EventRepository,
 	settingsService *SettingsService,
 	logger *slog.Logger,
 ) *RetentionService {

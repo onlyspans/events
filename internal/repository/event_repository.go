@@ -9,7 +9,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/onlyspans/events/internal/domain"
+	"github.com/onlyspans/events/internal/ports"
 )
+
+// Compile-time check that EventRepository implements ports.EventRepository.
+var _ ports.EventRepository = (*EventRepository)(nil)
 
 // EventRepository handles event data access operations.
 type EventRepository struct {
@@ -105,27 +109,8 @@ func (r *EventRepository) SaveBatch(ctx context.Context, events []*domain.Event)
 	return nil
 }
 
-// SearchQuery represents search criteria for events.
-type SearchQuery struct {
-	User          string
-	Category      string
-	Action        string
-	Document      string
-	Project       string
-	Environment   string
-	Tenant        string
-	CorrelationID string
-	TraceID       string
-	StartDate     *time.Time
-	EndDate       *time.Time
-	SortBy        string
-	SortOrder     string
-	Page          int
-	Size          int
-}
-
 // Search retrieves events matching the query criteria with pagination.
-func (r *EventRepository) Search(ctx context.Context, query SearchQuery) ([]*domain.Event, int64, error) {
+func (r *EventRepository) Search(ctx context.Context, query ports.EventSearchQuery) ([]*domain.Event, int64, error) {
 	// Build WHERE clause
 	var conditions []string
 	var args []interface{}

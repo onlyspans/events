@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/onlyspans/events/internal/domain"
 	"github.com/onlyspans/events/internal/dto"
-	"github.com/onlyspans/events/internal/repository"
+	"github.com/onlyspans/events/internal/ports"
 )
 
 // mockEventRepository is a mock implementation for testing.
@@ -21,6 +21,14 @@ type mockEventRepository struct {
 	searchTotal  int64
 }
 
+func (m *mockEventRepository) Create(ctx context.Context, event *domain.Event) (uuid.UUID, error) {
+	if m.saveError != nil {
+		return uuid.Nil, m.saveError
+	}
+	m.events = append(m.events, event)
+	return event.ID, nil
+}
+
 func (m *mockEventRepository) SaveBatch(ctx context.Context, events []*domain.Event) error {
 	if m.saveError != nil {
 		return m.saveError
@@ -29,7 +37,7 @@ func (m *mockEventRepository) SaveBatch(ctx context.Context, events []*domain.Ev
 	return nil
 }
 
-func (m *mockEventRepository) Search(ctx context.Context, query repository.SearchQuery) ([]*domain.Event, int64, error) {
+func (m *mockEventRepository) Search(ctx context.Context, query ports.EventSearchQuery) ([]*domain.Event, int64, error) {
 	if m.searchError != nil {
 		return nil, 0, m.searchError
 	}
