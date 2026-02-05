@@ -357,6 +357,12 @@ The following improvements are identified but excluded from this refactoring:
 
 ---
 
+## Code Style Guidelines
+
+**Comments**: Keep comments minimal. Only add comments to explain non-trivial logic, edge cases, or workarounds. Avoid obvious comments that just restate what the code does. Well-named functions and variables should be self-documenting.
+
+---
+
 ## Success Criteria
 
 1. All existing tests pass
