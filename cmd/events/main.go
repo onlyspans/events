@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -128,20 +129,17 @@ func main() {
 		}
 	})
 
-	// Health routes
 	mux.HandleFunc("/readyz", healthHandler.Readiness)
 	mux.HandleFunc("/healthz", healthHandler.Liveness)
 
-	// Metrics route
 	mux.Handle("/metrics", promhttp.Handler())
 
-	// Create HTTP server
 	server := &http.Server{
-		Addr:         ":" + cfg.Server.Port,
+		Addr:         ":8080",
 		Handler:      loggingMiddleware(mux, logger),
-		ReadTimeout:  cfg.Server.ReadTimeout,
-		WriteTimeout: cfg.Server.WriteTimeout,
-		IdleTimeout:  cfg.Server.IdleTimeout,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	// Create context for graceful shutdown
@@ -153,8 +151,8 @@ func main() {
 
 	// Start HTTP server in errgroup
 	g.Go(func() error {
-		logger.Info("starting HTTP server", "port", cfg.Server.Port)
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Info("starting HTTP server", "port", "8080")
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("HTTP server error", "error", err)
 			return err
 		}

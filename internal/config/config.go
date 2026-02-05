@@ -12,35 +12,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-// Config holds all application configuration.
-//
-// Environment Variables:
-//
-// Required:
-//   - POSTGRES_DSN: PostgreSQL connection string
-//     Example: "postgres://user:pass@localhost:5432/dbname?sslmode=disable"
-//
-// Optional:
-//   - SERVER_PORT (default: 8080)
-//   - KAFKA_ENABLED (default: false)
-//   - AUTO_MIGRATE (default: true)
-//   - RETENTION_PERIOD_DAYS (default: 90)
-//   - MAX_EXPORT_SIZE (default: 10000)
-//   - RETENTION_CRON (default: "0 2 * * *")
-//
-// Kafka Configuration (when KAFKA_ENABLED=true):
-//   - KAFKA_BROKERS: Comma-separated broker addresses (e.g., "localhost:9092,broker2:9092")
-//   - KAFKA_TOPIC (default: events)
-//   - KAFKA_GROUP_ID (default: events-group)
-//   - KAFKA_USERNAME (optional, enables SASL/SCRAM)
-//   - KAFKA_PASSWORD (optional, enables SASL/SCRAM)
-//   - KAFKA_MAX_POLL_RECORDS (default: 100)
-//   - KAFKA_FETCH_MIN_BYTES (default: 1)
-//   - KAFKA_FETCH_MAX_WAIT_MS (default: 500)
-//   - KAFKA_SESSION_TIMEOUT_MS (default: 30000)
-//   - KAFKA_HEARTBEAT_INTERVAL_MS (default: 10000)
 type Config struct {
-	Server   ServerConfig
 	Database DatabaseConfig
 	Kafka    KafkaConfig
 	EventLog EventLogConfig
@@ -51,14 +23,6 @@ type Config struct {
 type FeatureFlags struct {
 	KafkaEnabled bool
 	AutoMigrate  bool
-}
-
-// ServerConfig holds HTTP server configuration.
-type ServerConfig struct {
-	Port         string
-	ReadTimeout  time.Duration
-	WriteTimeout time.Duration
-	IdleTimeout  time.Duration
 }
 
 // DatabaseConfig holds PostgreSQL configuration.
@@ -113,12 +77,6 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		Server: ServerConfig{
-			Port:         getEnv("SERVER_PORT", "8080"),
-			ReadTimeout:  time.Duration(getEnvAsInt("SERVER_READ_TIMEOUT_SECONDS", 15)) * time.Second,
-			WriteTimeout: time.Duration(getEnvAsInt("SERVER_WRITE_TIMEOUT_SECONDS", 30)) * time.Second,
-			IdleTimeout:  time.Duration(getEnvAsInt("SERVER_IDLE_TIMEOUT_SECONDS", 60)) * time.Second,
-		},
 		Database: DatabaseConfig{
 			DSN:             getEnv("POSTGRES_DSN", ""),
 			MaxOpenConns:    getEnvAsInt("DB_MAX_OPEN_CONNS", 25),
@@ -198,17 +156,6 @@ func (c *Config) Validate() error {
 	if c.Database.MaxIdleConns > c.Database.MaxOpenConns {
 		errs = append(errs, fmt.Errorf("DB_MAX_IDLE_CONNS (%d) cannot exceed DB_MAX_OPEN_CONNS (%d)",
 			c.Database.MaxIdleConns, c.Database.MaxOpenConns))
-	}
-
-	// Validate server timeouts
-	if c.Server.ReadTimeout <= 0 {
-		errs = append(errs, errors.New("SERVER_READ_TIMEOUT_SECONDS must be positive"))
-	}
-	if c.Server.WriteTimeout <= 0 {
-		errs = append(errs, errors.New("SERVER_WRITE_TIMEOUT_SECONDS must be positive"))
-	}
-	if c.Server.IdleTimeout <= 0 {
-		errs = append(errs, errors.New("SERVER_IDLE_TIMEOUT_SECONDS must be positive"))
 	}
 
 	if len(errs) > 0 {

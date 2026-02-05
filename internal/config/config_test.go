@@ -214,10 +214,6 @@ func TestLoad_MinimalConfiguration(t *testing.T) {
 		t.Fatalf("Load() failed: %v", err)
 	}
 
-	// Verify defaults
-	if cfg.Server.Port != "8080" {
-		t.Errorf("expected default SERVER_PORT=8080, got %s", cfg.Server.Port)
-	}
 	if cfg.Database.DSN != "" {
 		t.Errorf("expected empty default POSTGRES_DSN, got %s", cfg.Database.DSN)
 	}
@@ -365,12 +361,6 @@ func TestKafkaConfig_GetBrokers(t *testing.T) {
 // validConfig returns a Config with valid values for testing.
 func validConfig() *Config {
 	return &Config{
-		Server: ServerConfig{
-			Port:         "8080",
-			ReadTimeout:  15 * time.Second,
-			WriteTimeout: 30 * time.Second,
-			IdleTimeout:  60 * time.Second,
-		},
 		Database: DatabaseConfig{
 			DSN:             "postgres://user:pass@localhost:5432/db",
 			MaxOpenConns:    25,
@@ -552,11 +542,11 @@ func TestConfig_Validate_MaxExportSize(t *testing.T) {
 
 func TestConfig_Validate_DatabasePoolSize(t *testing.T) {
 	tests := []struct {
-		name         string
-		maxOpen      int
-		maxIdle      int
-		wantErr      bool
-		errContains  string
+		name        string
+		maxOpen     int
+		maxIdle     int
+		wantErr     bool
+		errContains string
 	}{
 		{"valid", 25, 5, false, ""},
 		{"valid equal", 10, 10, false, ""},
@@ -608,10 +598,6 @@ func TestConfig_Validate_ServerTimeouts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := validConfig()
-			cfg.Server.ReadTimeout = tt.read
-			cfg.Server.WriteTimeout = tt.write
-			cfg.Server.IdleTimeout = tt.idle
-
 			err := cfg.Validate()
 			if tt.wantErr {
 				if err == nil {
@@ -674,16 +660,6 @@ func TestLoad_NewConfigFields(t *testing.T) {
 		t.Fatalf("Load() failed: %v", err)
 	}
 
-	// Verify default values for new fields
-	if cfg.Server.ReadTimeout != 15*time.Second {
-		t.Errorf("expected default ReadTimeout=15s, got %v", cfg.Server.ReadTimeout)
-	}
-	if cfg.Server.WriteTimeout != 30*time.Second {
-		t.Errorf("expected default WriteTimeout=30s, got %v", cfg.Server.WriteTimeout)
-	}
-	if cfg.Server.IdleTimeout != 60*time.Second {
-		t.Errorf("expected default IdleTimeout=60s, got %v", cfg.Server.IdleTimeout)
-	}
 	if cfg.Database.MaxOpenConns != 25 {
 		t.Errorf("expected default MaxOpenConns=25, got %d", cfg.Database.MaxOpenConns)
 	}
@@ -717,16 +693,6 @@ func TestLoad_CustomConfigFields(t *testing.T) {
 		t.Fatalf("Load() failed: %v", err)
 	}
 
-	// Verify custom values
-	if cfg.Server.ReadTimeout != 10*time.Second {
-		t.Errorf("expected ReadTimeout=10s, got %v", cfg.Server.ReadTimeout)
-	}
-	if cfg.Server.WriteTimeout != 20*time.Second {
-		t.Errorf("expected WriteTimeout=20s, got %v", cfg.Server.WriteTimeout)
-	}
-	if cfg.Server.IdleTimeout != 45*time.Second {
-		t.Errorf("expected IdleTimeout=45s, got %v", cfg.Server.IdleTimeout)
-	}
 	if cfg.Database.MaxOpenConns != 50 {
 		t.Errorf("expected MaxOpenConns=50, got %d", cfg.Database.MaxOpenConns)
 	}
