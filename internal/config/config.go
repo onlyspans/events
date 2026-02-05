@@ -32,13 +32,11 @@ type DatabaseConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers      string
-	Topic        string
-	GroupID      string
-	Username     string
-	Password     string
-	BatchSize    int
-	BatchTimeout time.Duration
+	Brokers  string
+	Topic    string
+	GroupID  string
+	Username string
+	Password string
 }
 
 type EventLogConfig struct {
@@ -48,16 +46,12 @@ type EventLogConfig struct {
 }
 
 const (
-	minRetentionDays   = 1
-	maxRetentionDays   = 10 * 365
-	minExportSize      = 1
-	maxExportSize      = 100000
-	minPoolSize        = 1
-	maxPoolSize        = 100
-	minKafkaBatchSize  = 1
-	maxKafkaBatchSize  = 1000
-	minBatchTimeoutMs  = 100
-	maxBatchTimeoutMs  = 30000
+	minRetentionDays = 1
+	maxRetentionDays = 10 * 365
+	minExportSize    = 1
+	maxExportSize    = 100000
+	minPoolSize      = 1
+	maxPoolSize      = 100
 )
 
 // Load reads configuration from environment variables with defaults.
@@ -81,13 +75,11 @@ func Load() (*Config, error) {
 			ConnMaxLifetime: time.Duration(getIntEnv("DB_CONN_MAX_LIFETIME_MINUTES", 5)) * time.Minute,
 		},
 		Kafka: KafkaConfig{
-			Brokers:      getEnv("KAFKA_BROKERS", "localhost:9092"),
-			Topic:        getEnv("KAFKA_TOPIC", "events"),
-			GroupID:      getEnv("KAFKA_GROUP_ID", "events-group"),
-			Username:     getEnv("KAFKA_USERNAME", ""),
-			Password:     getEnv("KAFKA_PASSWORD", ""),
-			BatchSize:    getIntEnv("KAFKA_BATCH_SIZE", 100),
-			BatchTimeout: time.Duration(getIntEnv("KAFKA_BATCH_TIMEOUT_MS", 500)) * time.Millisecond,
+			Brokers:  getEnv("KAFKA_BROKERS", "localhost:9092"),
+			Topic:    getEnv("KAFKA_TOPIC", "events"),
+			GroupID:  getEnv("KAFKA_GROUP_ID", "events-group"),
+			Username: getEnv("KAFKA_USERNAME", ""),
+			Password: getEnv("KAFKA_PASSWORD", ""),
 		},
 		EventLog: EventLogConfig{
 			RetentionPeriodDays: getIntEnv("RETENTION_PERIOD_DAYS", 90),
@@ -117,15 +109,6 @@ func (c *Config) Validate() error {
 		}
 		if c.Kafka.GroupID == "" {
 			errs = append(errs, errors.New("KAFKA_GROUP_ID is required when Kafka is enabled"))
-		}
-		if c.Kafka.BatchSize < minKafkaBatchSize || c.Kafka.BatchSize > maxKafkaBatchSize {
-			errs = append(errs, fmt.Errorf("KAFKA_BATCH_SIZE must be between %d and %d, got %d",
-				minKafkaBatchSize, maxKafkaBatchSize, c.Kafka.BatchSize))
-		}
-		batchTimeoutMs := int(c.Kafka.BatchTimeout / time.Millisecond)
-		if batchTimeoutMs < minBatchTimeoutMs || batchTimeoutMs > maxBatchTimeoutMs {
-			errs = append(errs, fmt.Errorf("KAFKA_BATCH_TIMEOUT_MS must be between %d and %d, got %d",
-				minBatchTimeoutMs, maxBatchTimeoutMs, batchTimeoutMs))
 		}
 	}
 

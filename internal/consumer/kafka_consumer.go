@@ -33,14 +33,19 @@ var (
 	})
 )
 
+const (
+	// batchSize is the maximum number of messages to process in a single batch.
+	batchSize = 100
+	// batchTimeout is the maximum time to wait before processing a partial batch.
+	batchTimeout = 500 * time.Millisecond
+)
+
 // KafkaConsumer handles consuming events from Kafka.
 type KafkaConsumer struct {
-	consumer     sarama.ConsumerGroup
-	ingester     ports.EventIngester
-	topic        string
-	batchSize    int
-	batchTimeout time.Duration
-	logger       *slog.Logger
+	consumer sarama.ConsumerGroup
+	ingester ports.EventIngester
+	topic    string
+	logger   *slog.Logger
 }
 
 // NewKafkaConsumer creates a new KafkaConsumer.
@@ -76,12 +81,10 @@ func NewKafkaConsumer(cfg *config.KafkaConfig, ingester ports.EventIngester, log
 	}
 
 	return &KafkaConsumer{
-		consumer:     consumer,
-		ingester:     ingester,
-		topic:        cfg.Topic,
-		batchSize:    cfg.BatchSize,
-		batchTimeout: cfg.BatchTimeout,
-		logger:       logger,
+		consumer: consumer,
+		ingester: ingester,
+		topic:    cfg.Topic,
+		logger:   logger,
 	}, nil
 }
 
@@ -184,8 +187,8 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 	// Use session context for proper cancellation propagation
 	ctx := session.Context()
 
-	batch := make([]*eventWithMessage, 0, h.consumer.batchSize)
-	ticker := time.NewTicker(h.consumer.batchTimeout)
+	batch := make([]*eventWithMessage, 0, batchSize)
+	ticker := time.NewTicker(batchTimeout)
 	defer ticker.Stop()
 
 	processBatch := func() error {
@@ -216,7 +219,7 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 		session.MarkMessage(batch[lastIdx].msg, "")
 		session.Commit()
 
-		batch = make([]*eventWithMessage, 0, h.consumer.batchSize)
+		batch = make([]*eventWithMessage, 0, batchSize)
 		return nil
 	}
 
@@ -249,7 +252,7 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 			batch = append(batch, &eventWithMessage{EventDTO: event, msg: message})
 
 			// Process batch when it reaches size limit
-			if len(batch) >= h.consumer.batchSize {
+			if len(batch) >= batchSize {
 				if err := processBatch(); err != nil {
 					// Don't commit on error - messages will be reprocessed
 					return err

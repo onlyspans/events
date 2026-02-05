@@ -258,19 +258,14 @@ Improve context propagation and shutdown handling in the Kafka consumer.
 
 **Changes Made:**
 - Created `ports.EventIngester` interface with minimal `IngestEvents` method
-- Added `BatchSize` and `BatchTimeout` to `KafkaConfig` with environment variables and validation
 - Refactored `KafkaConsumer` to accept `ports.EventIngester` interface instead of concrete `*service.EventService`
 - Fixed `ready` channel race condition by using mutex-protected `resetReady()` method
 - Replaced `context.Background()` with `session.Context()` in `ConsumeClaim` for proper cancellation propagation
 - Improved error logging to include partition and offset information
-- Made batch size and timeout configurable via `KAFKA_BATCH_SIZE` and `KAFKA_BATCH_TIMEOUT_MS` environment variables
-- Added validation for new Kafka batch configuration options
-- Added tests for new config validation rules
+- Defined batch size (100) and timeout (500ms) as constants in consumer package
 
 **Files:**
 - Modify: `internal/ports/services.go` (added `EventIngester` interface)
-- Modify: `internal/config/config.go` (added batch settings and validation)
-- Modify: `internal/config/config_test.go` (added tests for batch settings)
 - Modify: `internal/consumer/kafka_consumer.go` (main refactoring)
 
 **Verification:** `go test -race ./...` - All tests pass
