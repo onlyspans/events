@@ -62,18 +62,19 @@ Create the interface abstractions that will decouple the layers.
 
 ---
 
-### [ ] Step: Add Configuration Validation
+### [x] Step: Add Configuration Validation
+<!-- chat-id: 6391c010-0780-42f7-9b2f-a7ab1a63364d -->
 
 Add validation to catch configuration errors at startup.
 
 **Tasks:**
-- [ ] Add `Validate()` method to `Config` struct
-- [ ] Validate required fields (POSTGRES_DSN)
-- [ ] Validate numeric ranges (retention days, export size, pool sizes)
-- [ ] Call `Validate()` in `main.go` after `Load()`
-- [ ] Centralize magic numbers into config structs (timeouts, batch sizes, pool sizes)
-- [ ] Update tests for configuration validation
-- [ ] Run tests
+- [x] Add `Validate()` method to `Config` struct
+- [x] Validate required fields (POSTGRES_DSN)
+- [x] Validate numeric ranges (retention days, export size, pool sizes)
+- [x] Call `Validate()` in `main.go` after `Load()`
+- [x] Centralize magic numbers into config structs (timeouts, batch sizes, pool sizes)
+- [x] Update tests for configuration validation
+- [x] Run tests
 
 **Files:**
 - Modify: `internal/config/config.go`

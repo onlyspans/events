@@ -1,6 +1,8 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
@@ -53,13 +55,19 @@ type FeatureFlags struct {
 
 // ServerConfig holds HTTP server configuration.
 type ServerConfig struct {
-	Port string
+	Port         string
+	ReadTimeout  time.Duration
+	WriteTimeout time.Duration
+	IdleTimeout  time.Duration
 }
 
 // DatabaseConfig holds PostgreSQL configuration.
 type DatabaseConfig struct {
 	// DSN is the PostgreSQL connection string (e.g., "postgres://user:pass@localhost:5432/dbname?sslmode=disable")
-	DSN string
+	DSN             string
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
 }
 
 // KafkaConfig holds Kafka configuration.
@@ -84,6 +92,16 @@ type EventLogConfig struct {
 	RetentionCron       string
 }
 
+// Validation constants
+const (
+	minRetentionDays = 1
+	maxRetentionDays = 3650 // 10 years
+	minExportSize    = 1
+	maxExportSize    = 100000
+	minPoolSize      = 1
+	maxPoolSize      = 100
+)
+
 // Load reads configuration from environment variables with defaults.
 // It automatically loads from .env file if present.
 func Load() (*Config, error) {
@@ -96,10 +114,16 @@ func Load() (*Config, error) {
 
 	cfg := &Config{
 		Server: ServerConfig{
-			Port: getEnv("SERVER_PORT", "8080"),
+			Port:         getEnv("SERVER_PORT", "8080"),
+			ReadTimeout:  time.Duration(getEnvAsInt("SERVER_READ_TIMEOUT_SECONDS", 15)) * time.Second,
+			WriteTimeout: time.Duration(getEnvAsInt("SERVER_WRITE_TIMEOUT_SECONDS", 30)) * time.Second,
+			IdleTimeout:  time.Duration(getEnvAsInt("SERVER_IDLE_TIMEOUT_SECONDS", 60)) * time.Second,
 		},
 		Database: DatabaseConfig{
-			DSN: getEnv("POSTGRES_DSN", ""),
+			DSN:             getEnv("POSTGRES_DSN", ""),
+			MaxOpenConns:    getEnvAsInt("DB_MAX_OPEN_CONNS", 25),
+			MaxIdleConns:    getEnvAsInt("DB_MAX_IDLE_CONNS", 5),
+			ConnMaxLifetime: time.Duration(getEnvAsInt("DB_CONN_MAX_LIFETIME_MINUTES", 5)) * time.Minute,
 		},
 		Kafka: KafkaConfig{
 			Brokers:           getEnv("KAFKA_BROKERS", "localhost:9092"),
@@ -125,6 +149,72 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// Validate checks that the configuration values are valid.
+// It returns an error if any required fields are missing or if values are out of range.
+func (c *Config) Validate() error {
+	var errs []error
+
+	// Required fields
+	if c.Database.DSN == "" {
+		errs = append(errs, errors.New("POSTGRES_DSN is required"))
+	}
+
+	// Kafka validation (only when enabled)
+	if c.Features.KafkaEnabled {
+		if c.Kafka.Brokers == "" {
+			errs = append(errs, errors.New("KAFKA_BROKERS is required when Kafka is enabled"))
+		}
+		if c.Kafka.Topic == "" {
+			errs = append(errs, errors.New("KAFKA_TOPIC is required when Kafka is enabled"))
+		}
+		if c.Kafka.GroupID == "" {
+			errs = append(errs, errors.New("KAFKA_GROUP_ID is required when Kafka is enabled"))
+		}
+	}
+
+	// Numeric range validations
+	if c.EventLog.RetentionPeriodDays < minRetentionDays || c.EventLog.RetentionPeriodDays > maxRetentionDays {
+		errs = append(errs, fmt.Errorf("RETENTION_PERIOD_DAYS must be between %d and %d, got %d",
+			minRetentionDays, maxRetentionDays, c.EventLog.RetentionPeriodDays))
+	}
+
+	if c.EventLog.MaxExportSize < minExportSize || c.EventLog.MaxExportSize > maxExportSize {
+		errs = append(errs, fmt.Errorf("MAX_EXPORT_SIZE must be between %d and %d, got %d",
+			minExportSize, maxExportSize, c.EventLog.MaxExportSize))
+	}
+
+	if c.Database.MaxOpenConns < minPoolSize || c.Database.MaxOpenConns > maxPoolSize {
+		errs = append(errs, fmt.Errorf("DB_MAX_OPEN_CONNS must be between %d and %d, got %d",
+			minPoolSize, maxPoolSize, c.Database.MaxOpenConns))
+	}
+
+	if c.Database.MaxIdleConns < minPoolSize || c.Database.MaxIdleConns > maxPoolSize {
+		errs = append(errs, fmt.Errorf("DB_MAX_IDLE_CONNS must be between %d and %d, got %d",
+			minPoolSize, maxPoolSize, c.Database.MaxIdleConns))
+	}
+
+	if c.Database.MaxIdleConns > c.Database.MaxOpenConns {
+		errs = append(errs, fmt.Errorf("DB_MAX_IDLE_CONNS (%d) cannot exceed DB_MAX_OPEN_CONNS (%d)",
+			c.Database.MaxIdleConns, c.Database.MaxOpenConns))
+	}
+
+	// Validate server timeouts
+	if c.Server.ReadTimeout <= 0 {
+		errs = append(errs, errors.New("SERVER_READ_TIMEOUT_SECONDS must be positive"))
+	}
+	if c.Server.WriteTimeout <= 0 {
+		errs = append(errs, errors.New("SERVER_WRITE_TIMEOUT_SECONDS must be positive"))
+	}
+	if c.Server.IdleTimeout <= 0 {
+		errs = append(errs, errors.New("SERVER_IDLE_TIMEOUT_SECONDS must be positive"))
+	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
 }
 
 // GetBrokers returns a list of Kafka broker addresses.

@@ -37,6 +37,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		logger.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
+
 	// Log feature flags status
 	logger.Info("feature flags",
 		"kafka_enabled", cfg.Features.KafkaEnabled,
@@ -52,9 +58,9 @@ func main() {
 	defer db.Close()
 
 	// Configure connection pool
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
+	db.SetMaxOpenConns(cfg.Database.MaxOpenConns)
+	db.SetMaxIdleConns(cfg.Database.MaxIdleConns)
+	db.SetConnMaxLifetime(cfg.Database.ConnMaxLifetime)
 
 	// Test database connection
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -133,9 +139,9 @@ func main() {
 	server := &http.Server{
 		Addr:         ":" + cfg.Server.Port,
 		Handler:      loggingMiddleware(mux, logger),
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
+		IdleTimeout:  cfg.Server.IdleTimeout,
 	}
 
 	// Create context for graceful shutdown
