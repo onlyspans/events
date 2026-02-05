@@ -40,7 +40,6 @@ type ChangeDTO struct {
 }
 
 // EventFilterRequest contains common filter fields for event queries.
-// It is embedded by SearchEventsRequest and aliased by ExportEventsRequest.
 type EventFilterRequest struct {
 	User          string     `json:"user,omitempty"`
 	Category      string     `json:"category,omitempty"`
@@ -58,7 +57,6 @@ type EventFilterRequest struct {
 }
 
 // SearchEventsRequest represents the search request parameters.
-// It embeds EventFilterRequest and adds pagination fields.
 type SearchEventsRequest struct {
 	EventFilterRequest
 	Page int `json:"page,omitempty"`
@@ -66,8 +64,6 @@ type SearchEventsRequest struct {
 }
 
 // ExportEventsRequest represents the export request parameters.
-// It is an alias for EventFilterRequest since exports use the same filters
-// without pagination (the export size is controlled by service configuration).
 type ExportEventsRequest = EventFilterRequest
 
 // QueryResult represents the search results with pagination.
@@ -109,8 +105,6 @@ func (e *EventIngestRequest) Validate() error {
 }
 
 // ToEvent converts the EventIngestRequest to a domain.Event.
-// The ID and CreatedAt fields will be set by the service layer.
-// If Timestamp is zero, it will be set to time.Now() by the service layer.
 func (e *EventIngestRequest) ToEvent() *domain.Event {
 	var details *domain.EventDetails
 	if len(e.Details) > 0 {
@@ -181,7 +175,7 @@ type BatchError struct {
 	Error string `json:"error"`
 }
 
-// SingleIngestResponse represents the response for a single event ingestion.
+// SingleIngestResponse represents the response for single event ingestion.
 type SingleIngestResponse struct {
 	ID uuid.UUID `json:"id"`
 }
