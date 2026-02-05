@@ -24,7 +24,6 @@ func NewSettingsHandler(settingsService ports.SettingsService, logger *slog.Logg
 }
 
 // GetSettings handles GET /settings requests.
-// Note: Method routing is handled by the caller in main.go.
 func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 	h.logger.Debug("getting settings")
 
@@ -39,7 +38,6 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateSettings handles PUT /settings requests.
-// Note: Method routing is handled by the caller in main.go.
 func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var req dto.SettingsDTO
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

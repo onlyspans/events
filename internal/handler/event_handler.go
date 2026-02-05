@@ -13,14 +13,13 @@ import (
 	"github.com/onlyspans/events/internal/ports"
 )
 
-// Handler timeouts for different operations.
 const (
-	searchTimeout  = 30 * time.Second
-	exportTimeout  = 60 * time.Second
-	ingestTimeout  = 5 * time.Second
-	batchTimeout   = 30 * time.Second
-	maxPageSize    = 1000
-	maxBatchSize   = 100
+	searchTimeout = 30 * time.Second
+	exportTimeout = 60 * time.Second
+	ingestTimeout = 5 * time.Second
+	batchTimeout  = 30 * time.Second
+	maxPageSize   = 1000
+	maxBatchSize  = 100
 )
 
 // EventHandler handles HTTP requests for events.

@@ -21,7 +21,6 @@ func NewHealthHandler(healthChecker ports.HealthChecker, logger *slog.Logger) *H
 	}
 }
 
-// healthStatus represents the health check response structure.
 type healthStatus struct {
 	Status   string `json:"status"`
 	Database string `json:"database"`
