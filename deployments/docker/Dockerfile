@@ -14,7 +14,7 @@ COPY cmd/ cmd/
 COPY internal/ internal/
 
 # Build unified binary
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o events ./cmd/events
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o events ./cmd/server
 
 # Runtime stage
 FROM gcr.io/distroless/static:nonroot

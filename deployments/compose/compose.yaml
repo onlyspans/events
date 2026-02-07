@@ -8,7 +8,7 @@ services:
     ports:
       - '5432:5432'
     volumes:
-      - ./data/postgres-data:/var/lib/postgresql/data
+      - ../../data/postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
@@ -16,7 +16,9 @@ services:
       retries: 5
 
   events:
-    build: .
+    build:
+      context: ../../
+      dockerfile: deployments/docker/Dockerfile
     ports:
       - '8080:8080'
     environment:
@@ -65,7 +67,7 @@ services:
       - '9092:9092'
       - '9101:9101'
     volumes:
-      - ./data/kafka-data:/var/lib/kafka/data
+      - ../../data/kafka-data:/var/lib/kafka/data
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181

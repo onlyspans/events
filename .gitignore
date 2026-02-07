@@ -15,6 +15,11 @@ dist/
 coverage.txt
 coverage.html
 
+# Profiling files
+*.prof
+cpu.prof
+mem.prof
+
 # Go workspace file
 go.work
 go.work.sum
@@ -34,6 +39,8 @@ vendor/
 .env
 .env.local
 .env.*.local
+configs/.env
+configs/.env.local
 
 # Temporary files
 tmp/
