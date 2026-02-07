@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -43,9 +42,8 @@ func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 		t.Fatalf("failed to get connection string: %v", err)
 	}
 
-	// Run migrations from migrations directory
-	migrationsPath := filepath.Join("..", "..", "migrations")
-	if err := migrations.Run(connStr, migrationsPath); err != nil {
+	// Run embedded migrations
+	if err := migrations.Run(connStr); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
 

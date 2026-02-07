@@ -102,7 +102,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 	}()
 
 	if cfg.Features.AutoMigrate {
-		if err := migrations.Run(cfg.Database.DSN, "./migrations"); err != nil {
+		if err := migrations.Run(cfg.Database.DSN); err != nil {
 			pool.Close()
 			return nil, err
 		}
