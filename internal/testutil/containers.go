@@ -110,7 +110,7 @@ func SetupPostgresWithMigrations(t *testing.T) *PostgresContainer {
 
 	pc := SetupPostgres(t)
 
-	// Run migrations
+	// Run embedded migrations
 	if err := migrations.Run(pc.DSN); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}

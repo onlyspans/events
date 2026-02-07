@@ -7,15 +7,20 @@ import (
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
+	migrationfiles "github.com/onlyspans/events/migrations"
 )
 
-// Run executes database migrations from the migrations directory.
-// It uses golang-migrate's standard approach with file-based migrations.
+// Run executes database migrations embedded at build time.
 func Run(databaseURL string) error {
 	slog.Info("starting database migrations")
 
-	m, err := migrate.New("file://migrations", databaseURL)
+	source, err := iofs.New(migrationfiles.FS, ".")
+	if err != nil {
+		return fmt.Errorf("create migrations source: %w", err)
+	}
+
+	m, err := migrate.NewWithSourceInstance("iofs", source, databaseURL)
 	if err != nil {
 		return fmt.Errorf("create migrate instance: %w", err)
 	}

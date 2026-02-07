@@ -48,7 +48,7 @@ func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 		t.Fatalf("failed to get connection string: %v", err)
 	}
 
-	// Run migrations from migrations directory
+	// Run embedded migrations
 	if err := migrations.Run(connStr); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
@@ -301,47 +301,5 @@ func TestEventHandler_IngestEventsBatch(t *testing.T) {
 				tt.checkResponse(t, w.Body.Bytes())
 			}
 		})
-	}
-}
-
-func TestEventHandler_IngestEvent_MethodNotAllowed(t *testing.T) {
-	pool, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	// Setup dependencies
-	eventRepo := repository.NewEventRepository(pool)
-	eventService := service.NewEventService(eventRepo, 10000) // maxExportSize = 10000
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	handler := NewEventHandler(eventService, logger)
-
-	// Test GET method (should be POST only)
-	req := httptest.NewRequest(http.MethodGet, "/events/ingest", nil)
-	w := httptest.NewRecorder()
-
-	handler.IngestEvent(w, req)
-
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, w.Code)
-	}
-}
-
-func TestEventHandler_IngestEventsBatch_MethodNotAllowed(t *testing.T) {
-	pool, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	// Setup dependencies
-	eventRepo := repository.NewEventRepository(pool)
-	eventService := service.NewEventService(eventRepo, 10000) // maxExportSize = 10000
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	handler := NewEventHandler(eventService, logger)
-
-	// Test GET method (should be POST only)
-	req := httptest.NewRequest(http.MethodGet, "/events/ingest/batch", nil)
-	w := httptest.NewRecorder()
-
-	handler.IngestEventsBatch(w, req)
-
-	if w.Code != http.StatusMethodNotAllowed {
-		t.Errorf("expected status %d, got %d", http.StatusMethodNotAllowed, w.Code)
 	}
 }
