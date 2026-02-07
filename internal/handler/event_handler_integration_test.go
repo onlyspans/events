@@ -19,9 +19,8 @@ import (
 func TestEventHandler_IngestEvent(t *testing.T) {
 	pg := testutil.SetupPostgres(t)
 
-	// Setup dependencies
 	eventRepo := repository.NewEventRepository(pg.Pool)
-	eventService := service.NewEventService(eventRepo, 10000) // maxExportSize = 10000
+	eventService := service.NewEventService(eventRepo, 10000)
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	handler := NewEventHandler(eventService, logger)
 
@@ -57,7 +56,7 @@ func TestEventHandler_IngestEvent(t *testing.T) {
 				Category: "test-category",
 				// Missing Action
 			},
-			expectedStatus: http.StatusInternalServerError, // Validation error returns 500 from service
+			expectedStatus: http.StatusInternalServerError,
 			checkResponse:  nil,
 		},
 		{
@@ -215,7 +214,6 @@ func TestEventHandler_IngestEventsBatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Prepare request body
 			var body []byte
 			var err error
 			if str, ok := tt.requestBody.(string); ok {
@@ -227,20 +225,16 @@ func TestEventHandler_IngestEventsBatch(t *testing.T) {
 				}
 			}
 
-			// Create HTTP request
 			req := httptest.NewRequest(http.MethodPost, "/events/ingest/batch", bytes.NewReader(body))
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
-			// Call handler
 			handler.IngestEventsBatch(w, req)
 
-			// Check status code
 			if w.Code != tt.expectedStatus {
 				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
 
-			// Check response if needed
 			if tt.checkResponse != nil {
 				tt.checkResponse(t, w.Body.Bytes())
 			}
