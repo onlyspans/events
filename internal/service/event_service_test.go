@@ -11,6 +11,7 @@ import (
 	"github.com/onlyspans/events/internal/domain"
 	"github.com/onlyspans/events/internal/dto"
 	"github.com/onlyspans/events/internal/ports"
+	"github.com/onlyspans/events/internal/testutil"
 )
 
 // mockEventRepository is a mock implementation for testing.
@@ -314,8 +315,8 @@ func TestCreateEvent(t *testing.T) {
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("CreateEvent() expected error, got nil")
-				} else if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
-					t.Errorf("CreateEvent() error = %v, should contain %q", err, tt.errMsg)
+				} else if tt.errMsg != "" {
+					testutil.AssertErrorContains(t, err, tt.errMsg)
 				}
 				if eventID != uuid.Nil {
 					t.Errorf("CreateEvent() expected nil UUID on error, got %v", eventID)
@@ -354,12 +355,12 @@ func TestCreateEvent(t *testing.T) {
 
 func TestCreateEventsBatch(t *testing.T) {
 	tests := []struct {
-		name             string
-		requests         []dto.EventIngestRequest
-		saveError        error
-		expectedSuccess  int
-		expectedFailure  int
-		expectedErrors   int
+		name              string
+		requests          []dto.EventIngestRequest
+		saveError         error
+		expectedSuccess   int
+		expectedFailure   int
+		expectedErrors    int
 		checkErrorIndices []int
 	}{
 		{
@@ -513,20 +514,15 @@ func TestCreateEventsBatch_RepositoryError(t *testing.T) {
 
 	// Verify all error messages contain "failed to save" and include event index
 	for i, err := range response.Errors {
-		if !contains(err.Error, "failed to save") {
+		if !strings.Contains(err.Error, "failed to save") {
 			t.Errorf("Error at index %d should contain 'failed to save', got: %s",
 				i, err.Error)
 		}
 		// Check that error includes event index for better debugging
 		expectedIndexPrefix := fmt.Sprintf("event %d:", i)
-		if !contains(err.Error, expectedIndexPrefix) {
+		if !strings.Contains(err.Error, expectedIndexPrefix) {
 			t.Errorf("Error at index %d should contain '%s', got: %s",
 				i, expectedIndexPrefix, err.Error)
 		}
 	}
-}
-
-// contains checks if a string contains a substring
-func contains(s, substr string) bool {
-	return strings.Contains(s, substr)
 }
