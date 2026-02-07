@@ -259,6 +259,94 @@ func (b *EventDTOBuilder) Build() *dto.EventDTO {
 	return b.dto
 }
 
+// EventIngestRequestBuilder provides a fluent API for ingest request payloads.
+type EventIngestRequestBuilder struct {
+	request *dto.EventIngestRequest
+}
+
+// NewEventIngestRequestBuilder creates a builder with defaults.
+func NewEventIngestRequestBuilder() *EventIngestRequestBuilder {
+	return &EventIngestRequestBuilder{
+		request: &dto.EventIngestRequest{
+			Timestamp: time.Now().UTC(),
+			User:      "test-user",
+			Category:  "test-category",
+			Action:    "test-action",
+		},
+	}
+}
+
+// WithTimestamp sets the request timestamp.
+func (b *EventIngestRequestBuilder) WithTimestamp(t time.Time) *EventIngestRequestBuilder {
+	b.request.Timestamp = t
+	return b
+}
+
+// WithUser sets the request user.
+func (b *EventIngestRequestBuilder) WithUser(user string) *EventIngestRequestBuilder {
+	b.request.User = user
+	return b
+}
+
+// WithCategory sets the request category.
+func (b *EventIngestRequestBuilder) WithCategory(category string) *EventIngestRequestBuilder {
+	b.request.Category = category
+	return b
+}
+
+// WithAction sets the request action.
+func (b *EventIngestRequestBuilder) WithAction(action string) *EventIngestRequestBuilder {
+	b.request.Action = action
+	return b
+}
+
+// WithDocumentName sets the document name.
+func (b *EventIngestRequestBuilder) WithDocumentName(name string) *EventIngestRequestBuilder {
+	b.request.DocumentName = name
+	return b
+}
+
+// WithProject sets the project.
+func (b *EventIngestRequestBuilder) WithProject(project string) *EventIngestRequestBuilder {
+	b.request.Project = project
+	return b
+}
+
+// WithEnvironment sets the environment.
+func (b *EventIngestRequestBuilder) WithEnvironment(env string) *EventIngestRequestBuilder {
+	b.request.Environment = env
+	return b
+}
+
+// WithTenant sets the tenant.
+func (b *EventIngestRequestBuilder) WithTenant(tenant string) *EventIngestRequestBuilder {
+	b.request.Tenant = tenant
+	return b
+}
+
+// WithDetails sets details.
+func (b *EventIngestRequestBuilder) WithDetails(details map[string]interface{}) *EventIngestRequestBuilder {
+	b.request.Details = details
+	return b
+}
+
+// WithCorrelationID sets the correlation ID.
+func (b *EventIngestRequestBuilder) WithCorrelationID(id string) *EventIngestRequestBuilder {
+	b.request.CorrelationID = id
+	return b
+}
+
+// WithTraceID sets the trace ID.
+func (b *EventIngestRequestBuilder) WithTraceID(id string) *EventIngestRequestBuilder {
+	b.request.TraceID = id
+	return b
+}
+
+// Build returns the constructed ingest request.
+func (b *EventIngestRequestBuilder) Build() dto.EventIngestRequest {
+	return *b.request
+}
+
 // SettingsBuilder provides a fluent API for building test settings
 type SettingsBuilder struct {
 	settings *domain.Settings

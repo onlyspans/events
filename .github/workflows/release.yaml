@@ -102,7 +102,7 @@ jobs:
       - name: Build Docker images
         run: |
           # Build main image
-          docker build . --rm --no-cache \
+          docker build -f deployments/docker/Dockerfile . --rm --no-cache \
             --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
             --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
             --build-arg REVISION='${{ github.sha }}' \

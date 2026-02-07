@@ -1,84 +1,17 @@
 package handler
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
-	"log/slog"
 	"net/http"
-	"net/http/httptest"
-	"os"
 	"testing"
-	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/onlyspans/events/internal/dto"
-	"github.com/onlyspans/events/internal/migrations"
-	"github.com/onlyspans/events/internal/repository"
-	"github.com/onlyspans/events/internal/service"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/wait"
+	"github.com/onlyspans/events/internal/testutil"
 )
 
-func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
-	t.Helper()
-
-	ctx := context.Background()
-
-	// Start PostgreSQL container
-	pgContainer, err := postgres.Run(ctx,
-		"postgres:17-alpine",
-		postgres.WithDatabase("testdb"),
-		postgres.WithUsername("testuser"),
-		postgres.WithPassword("testpass"),
-		testcontainers.WithWaitStrategy(
-			wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(60*time.Second)),
-	)
-	if err != nil {
-		t.Fatalf("failed to start postgres container: %v", err)
-	}
-
-	// Get connection string
-	connStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		t.Fatalf("failed to get connection string: %v", err)
-	}
-
-	// Run embedded migrations
-	if err := migrations.Run(connStr); err != nil {
-		t.Fatalf("failed to run migrations: %v", err)
-	}
-
-	// Create connection pool
-	pool, err := pgxpool.New(ctx, connStr)
-	if err != nil {
-		t.Fatalf("failed to create connection pool: %v", err)
-	}
-
-	// Cleanup function
-	cleanup := func() {
-		pool.Close()
-		if err := pgContainer.Terminate(ctx); err != nil {
-			t.Errorf("failed to terminate container: %v", err)
-		}
-	}
-
-	return pool, cleanup
-}
-
 func TestEventHandler_IngestEvent(t *testing.T) {
-	pool, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	// Setup dependencies
-	eventRepo := repository.NewEventRepository(pool)
-	eventService := service.NewEventService(eventRepo, 10000) // maxExportSize = 10000
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	handler := NewEventHandler(eventService, logger)
+	testApp := testutil.NewAppBuilder(t).Build()
 
 	tests := []struct {
 		name           string
@@ -88,12 +21,9 @@ func TestEventHandler_IngestEvent(t *testing.T) {
 	}{
 		{
 			name: "valid event",
-			requestBody: dto.EventIngestRequest{
-				User:     "test-user",
-				Category: "test-category",
-				Action:   "test-action",
-				Project:  "test-project",
-			},
+			requestBody: testutil.NewEventIngestRequestBuilder().
+				WithProject("test-project").
+				Build(),
 			expectedStatus: http.StatusCreated,
 			checkResponse: func(t *testing.T, body []byte) {
 				var resp dto.SingleIngestResponse
@@ -112,7 +42,7 @@ func TestEventHandler_IngestEvent(t *testing.T) {
 				Category: "test-category",
 				// Missing Action
 			},
-			expectedStatus: http.StatusInternalServerError, // Validation error returns 500 from service
+			expectedStatus: http.StatusInternalServerError,
 			checkResponse:  nil,
 		},
 		{
@@ -125,48 +55,31 @@ func TestEventHandler_IngestEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Prepare request body
-			var body []byte
-			var err error
+			request := testutil.NewRequestBuilder(t, testApp).
+				WithMethod(http.MethodPost).
+				WithPath("/events/ingest")
+
 			if str, ok := tt.requestBody.(string); ok {
-				body = []byte(str)
+				request.WithRawBody([]byte(str)).WithHeader("Content-Type", "application/json")
 			} else {
-				body, err = json.Marshal(tt.requestBody)
-				if err != nil {
-					t.Fatalf("failed to marshal request: %v", err)
-				}
+				request.WithJSON(tt.requestBody)
 			}
 
-			// Create HTTP request
-			req := httptest.NewRequest(http.MethodPost, "/events/ingest", bytes.NewReader(body))
-			req.Header.Set("Content-Type", "application/json")
-			w := httptest.NewRecorder()
+			resp := request.Do()
 
-			// Call handler
-			handler.IngestEvent(w, req)
-
-			// Check status code
-			if w.Code != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
+			if resp.StatusCode != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, resp.StatusCode)
 			}
 
-			// Check response if needed
 			if tt.checkResponse != nil {
-				tt.checkResponse(t, w.Body.Bytes())
+				tt.checkResponse(t, resp.Body)
 			}
 		})
 	}
 }
 
 func TestEventHandler_IngestEventsBatch(t *testing.T) {
-	pool, cleanup := setupTestDB(t)
-	defer cleanup()
-
-	// Setup dependencies
-	eventRepo := repository.NewEventRepository(pool)
-	eventService := service.NewEventService(eventRepo, 10000) // maxExportSize = 10000
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	handler := NewEventHandler(eventService, logger)
+	testApp := testutil.NewAppBuilder(t).Build()
 
 	tests := []struct {
 		name           string
@@ -271,34 +184,24 @@ func TestEventHandler_IngestEventsBatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Prepare request body
-			var body []byte
-			var err error
+			request := testutil.NewRequestBuilder(t, testApp).
+				WithMethod(http.MethodPost).
+				WithPath("/events/ingest/batch")
+
 			if str, ok := tt.requestBody.(string); ok {
-				body = []byte(str)
+				request.WithRawBody([]byte(str)).WithHeader("Content-Type", "application/json")
 			} else {
-				body, err = json.Marshal(tt.requestBody)
-				if err != nil {
-					t.Fatalf("failed to marshal request: %v", err)
-				}
+				request.WithJSON(tt.requestBody)
 			}
 
-			// Create HTTP request
-			req := httptest.NewRequest(http.MethodPost, "/events/ingest/batch", bytes.NewReader(body))
-			req.Header.Set("Content-Type", "application/json")
-			w := httptest.NewRecorder()
+			resp := request.Do()
 
-			// Call handler
-			handler.IngestEventsBatch(w, req)
-
-			// Check status code
-			if w.Code != tt.expectedStatus {
-				t.Errorf("expected status %d, got %d", tt.expectedStatus, w.Code)
+			if resp.StatusCode != tt.expectedStatus {
+				t.Errorf("expected status %d, got %d", tt.expectedStatus, resp.StatusCode)
 			}
 
-			// Check response if needed
 			if tt.checkResponse != nil {
-				tt.checkResponse(t, w.Body.Bytes())
+				tt.checkResponse(t, resp.Body)
 			}
 		})
 	}

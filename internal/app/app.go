@@ -208,6 +208,11 @@ func (app *Application) Run(ctx context.Context) error {
 	return g.Wait()
 }
 
+// Handler exposes the configured HTTP handler.
+func (app *Application) Handler() http.Handler {
+	return app.httpServer.Handler
+}
+
 func (app *Application) Shutdown(ctx context.Context) error {
 	app.logger.Info("shutting down application")
 
