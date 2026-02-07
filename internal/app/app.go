@@ -7,13 +7,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/onlyspans/events/internal/config"
 	"github.com/onlyspans/events/internal/consumer"
 	"github.com/onlyspans/events/internal/handler"
 	"github.com/onlyspans/events/internal/http/middleware"
-	"github.com/onlyspans/events/internal/migrations"
 	"github.com/onlyspans/events/internal/repository"
 	"github.com/onlyspans/events/internal/service"
 	"github.com/prometheus/client_golang/prometheus"
@@ -53,62 +51,11 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 		logger: logger,
 	}
 
-	poolConfig, err := pgxpool.ParseConfig(cfg.Database.DSN)
-	if err != nil {
-		return nil, err
-	}
-
-	poolConfig.MaxConns = cfg.Database.MaxConns
-	poolConfig.MinConns = cfg.Database.MinConns
-	poolConfig.MaxConnLifetime = cfg.Database.MaxConnLifetime
-	poolConfig.MaxConnIdleTime = cfg.Database.MaxConnIdleTime
-	poolConfig.HealthCheckPeriod = cfg.Database.HealthCheckPeriod
-
-	poolConfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
-		logger.Debug("new database connection established")
-		return nil
-	}
-
-	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
+	pool, err := setupPostgres(cfg, logger)
 	if err != nil {
 		return nil, err
 	}
 	app.pool = pool
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, err
-	}
-	logger.Info("database connection pool established",
-		"max_conns", cfg.Database.MaxConns,
-		"min_conns", cfg.Database.MinConns,
-	)
-
-	dbPoolMaxConnsGauge.Set(float64(cfg.Database.MaxConns))
-
-	go func() {
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			stat := pool.Stat()
-			dbPoolConnsGauge.WithLabelValues("total").Set(float64(stat.TotalConns()))
-			dbPoolConnsGauge.WithLabelValues("idle").Set(float64(stat.IdleConns()))
-			dbPoolConnsGauge.WithLabelValues("active").Set(float64(stat.AcquiredConns()))
-		}
-	}()
-
-	if cfg.Features.AutoMigrate {
-		if err := migrations.Run(cfg.Database.DSN); err != nil {
-			pool.Close()
-			return nil, err
-		}
-	} else {
-		logger.Info("auto-migrate disabled, skipping database migrations")
-	}
 
 	eventRepo := repository.NewEventRepository(pool)
 	settingsRepo := repository.NewSettingsRepository(pool)
@@ -174,6 +121,10 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 	return app, nil
 }
 
+func (app *Application) Handler() http.Handler {
+	return app.httpServer.Handler
+}
+
 func (app *Application) Run(ctx context.Context) error {
 	g, globalCtx := errgroup.WithContext(ctx)
 
@@ -206,11 +157,6 @@ func (app *Application) Run(ctx context.Context) error {
 	<-globalCtx.Done()
 
 	return g.Wait()
-}
-
-// Handler exposes the configured HTTP handler.
-func (app *Application) Handler() http.Handler {
-	return app.httpServer.Handler
 }
 
 func (app *Application) Shutdown(ctx context.Context) error {
