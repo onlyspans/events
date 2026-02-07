@@ -55,12 +55,20 @@ const (
 )
 
 // Load reads configuration from environment variables with defaults.
-// It automatically loads from an .env file if present.
+// It loads from configs/.env and configs/.env.local if present.
 func Load() (*Config, error) {
-	if err := godotenv.Load(); err != nil {
-		slog.Debug("no .env file found, using environment variables or defaults")
+	// Load base configuration from configs/.env
+	if err := godotenv.Load("configs/.env"); err != nil {
+		slog.Debug("no configs/.env file found, using environment variables or defaults")
 	} else {
-		slog.Info("loaded configuration from .env file")
+		slog.Info("loaded configuration from configs/.env")
+	}
+
+	// Load local overrides from configs/.env.local (optional)
+	if err := godotenv.Load("configs/.env.local"); err != nil {
+		slog.Debug("no configs/.env.local file found")
+	} else {
+		slog.Info("loaded local configuration overrides from configs/.env.local")
 	}
 
 	cfg := &Config{
