@@ -15,6 +15,7 @@ import (
 type PostgresContainer struct {
 	Container *postgres.PostgresContainer
 	Pool      *pgxpool.Pool
+	DSN       string
 }
 
 func SetupPostgres(t *testing.T) *PostgresContainer {
@@ -70,6 +71,7 @@ func SetupPostgres(t *testing.T) *PostgresContainer {
 	pc := &PostgresContainer{
 		Container: pgContainer,
 		Pool:      pool,
+		DSN:       dsn,
 	}
 
 	if err := migrations.Run(dsn); err != nil {
