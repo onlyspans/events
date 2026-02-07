@@ -48,6 +48,11 @@ func NewAppBuilder(t *testing.T) *AppBuilder {
 			MaxConnIdleTime:   30 * time.Minute,
 			HealthCheckPeriod: 60 * time.Second,
 		},
+		EventLog: config.EventLogConfig{
+			RetentionPeriodDays: 90,
+			MaxExportSize:       10000,
+			RetentionCron:       "0 2 * * *",
+		},
 	}
 
 	return &AppBuilder{
