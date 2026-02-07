@@ -2,12 +2,13 @@ package app
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/onlyspans/events/internal/config"
 	"github.com/onlyspans/events/internal/consumer"
 	"github.com/onlyspans/events/internal/handler"
@@ -17,14 +18,32 @@ import (
 	"github.com/onlyspans/events/internal/repository"
 	"github.com/onlyspans/events/internal/service"
 	"github.com/onlyspans/events/pkg/version"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/errgroup"
+)
+
+var (
+	dbPoolConnsGauge = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "db_pool_connections",
+			Help: "Current number of database connections",
+		},
+		[]string{"state"}, // idle, active, total
+	)
+	dbPoolMaxConnsGauge = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "db_pool_max_connections",
+			Help: "Maximum number of database connections",
+		},
+	)
 )
 
 // Application manages the lifecycle of the events service
 type Application struct {
 	config           *config.Config
-	db               *sql.DB
+	pool             *pgxpool.Pool
 	httpServer       *http.Server
 	kafkaConsumer    *consumer.KafkaConsumer
 	retentionService *service.RetentionService
@@ -38,32 +57,65 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 		logger: logger,
 	}
 
-	// Connect to database
-	db, err := sql.Open("postgres", cfg.Database.DSN)
+	// Parse database connection config
+	poolConfig, err := pgxpool.ParseConfig(cfg.Database.DSN)
 	if err != nil {
 		return nil, err
 	}
-	app.db = db
 
 	// Configure connection pool
-	db.SetMaxOpenConns(cfg.Database.MaxOpenConns)
-	db.SetMaxIdleConns(cfg.Database.MaxIdleConns)
-	db.SetConnMaxLifetime(cfg.Database.ConnMaxLifetime)
+	poolConfig.MaxConns = cfg.Database.MaxConns
+	poolConfig.MinConns = cfg.Database.MinConns
+	poolConfig.MaxConnLifetime = cfg.Database.MaxConnLifetime
+	poolConfig.MaxConnIdleTime = cfg.Database.MaxConnIdleTime
+	poolConfig.HealthCheckPeriod = cfg.Database.HealthCheckPeriod
+
+	// Optional: Add connection lifecycle hooks for logging
+	poolConfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		logger.Debug("new database connection established")
+		return nil
+	}
+
+	// Create connection pool
+	pool, err := pgxpool.NewWithConfig(context.Background(), poolConfig)
+	if err != nil {
+		return nil, err
+	}
+	app.pool = pool
 
 	// Test database connection
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	if err := db.PingContext(ctx); err != nil {
-		db.Close()
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
 		return nil, err
 	}
-	logger.Info("database connection established")
+	logger.Info("database connection pool established",
+		"max_conns", cfg.Database.MaxConns,
+		"min_conns", cfg.Database.MinConns,
+	)
+
+	// Set max connections metric (constant value)
+	dbPoolMaxConnsGauge.Set(float64(cfg.Database.MaxConns))
+
+	// Start pool metrics collection goroutine
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			stat := pool.Stat()
+			dbPoolConnsGauge.WithLabelValues("total").Set(float64(stat.TotalConns()))
+			dbPoolConnsGauge.WithLabelValues("idle").Set(float64(stat.IdleConns()))
+			dbPoolConnsGauge.WithLabelValues("active").Set(float64(stat.AcquiredConns()))
+		}
+	}()
 
 	// Run database migrations if auto-migrate is enabled
 	if cfg.Features.AutoMigrate {
 		if err := migrator.Run(cfg.Database.DSN); err != nil {
-			db.Close()
+			pool.Close()
 			return nil, err
 		}
 	} else {
@@ -71,8 +123,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 	}
 
 	// Initialize repositories
-	eventRepo := repository.NewEventRepository(db)
-	settingsRepo := repository.NewSettingsRepository(db)
+	eventRepo := repository.NewEventRepository(pool)
+	settingsRepo := repository.NewSettingsRepository(pool)
 
 	// Initialize services
 	eventService := service.NewEventService(eventRepo, cfg.EventLog.MaxExportSize)
@@ -85,7 +137,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 	// Initialize retention service
 	retentionService := service.NewRetentionService(eventRepo, settingsService, logger)
 	if err := retentionService.Start(cfg.EventLog.RetentionCron); err != nil {
-		db.Close()
+		pool.Close()
 		return nil, err
 	}
 	app.retentionService = retentionService
@@ -95,7 +147,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 		kafkaConsumer, err := consumer.NewKafkaConsumer(&cfg.Kafka, eventService, logger)
 		if err != nil {
 			retentionService.Stop()
-			db.Close()
+			pool.Close()
 			return nil, err
 		}
 		app.kafkaConsumer = kafkaConsumer
@@ -104,7 +156,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 	// Initialize handlers
 	eventHandler := handler.NewEventHandler(eventService, logger)
 	settingsHandler := handler.NewSettingsHandler(settingsService, logger)
-	healthChecker := handler.NewDBHealthChecker(db)
+	healthChecker := handler.NewDBHealthChecker(pool)
 	healthHandler := handler.NewHealthHandler(healthChecker, logger)
 
 	// Setup HTTP routes
@@ -219,12 +271,10 @@ func (app *Application) Shutdown(ctx context.Context) error {
 		app.retentionService.Stop()
 	}
 
-	// Close database
-	if app.db != nil {
-		if err := app.db.Close(); err != nil {
-			app.logger.Error("failed to close database", "error", err)
-			return err
-		}
+	// Close connection pool (synchronous and graceful)
+	if app.pool != nil {
+		app.pool.Close()
+		app.logger.Info("database connection pool closed")
 	}
 
 	app.logger.Info("application stopped gracefully")

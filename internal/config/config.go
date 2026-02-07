@@ -25,10 +25,12 @@ type FeatureFlags struct {
 }
 
 type DatabaseConfig struct {
-	DSN             string
-	MaxOpenConns    int
-	MaxIdleConns    int
-	ConnMaxLifetime time.Duration
+	DSN               string
+	MaxConns          int32         // Maximum number of connections (replaces MaxOpenConns)
+	MinConns          int32         // Minimum number of idle connections (replaces MaxIdleConns)
+	MaxConnLifetime   time.Duration // Maximum connection lifetime (replaces ConnMaxLifetime)
+	MaxConnIdleTime   time.Duration // Maximum connection idle time
+	HealthCheckPeriod time.Duration // Connection health check interval
 }
 
 type KafkaConfig struct {
@@ -77,10 +79,12 @@ func Load() (*Config, error) {
 			AutoMigrate:  getBoolEnv("AUTO_MIGRATE", true),
 		},
 		Database: DatabaseConfig{
-			DSN:             getEnv("POSTGRES_DSN", ""),
-			MaxOpenConns:    getIntEnv("DB_MAX_OPEN_CONNS", 25),
-			MaxIdleConns:    getIntEnv("DB_MAX_IDLE_CONNS", 5),
-			ConnMaxLifetime: time.Duration(getIntEnv("DB_CONN_MAX_LIFETIME_MINUTES", 5)) * time.Minute,
+			DSN:               getEnv("POSTGRES_DSN", ""),
+			MaxConns:          int32(getIntEnv("DB_MAX_CONNS", 25)),
+			MinConns:          int32(getIntEnv("DB_MIN_CONNS", 2)),
+			MaxConnLifetime:   time.Duration(getIntEnv("DB_MAX_CONN_LIFETIME_MINUTES", 5)) * time.Minute,
+			MaxConnIdleTime:   time.Duration(getIntEnv("DB_MAX_CONN_IDLE_TIME_MINUTES", 30)) * time.Minute,
+			HealthCheckPeriod: time.Duration(getIntEnv("DB_HEALTH_CHECK_PERIOD_SECONDS", 60)) * time.Second,
 		},
 		Kafka: KafkaConfig{
 			Brokers:  getEnv("KAFKA_BROKERS", "localhost:9092"),
@@ -130,19 +134,19 @@ func (c *Config) Validate() error {
 			minExportSize, maxExportSize, c.EventLog.MaxExportSize))
 	}
 
-	if c.Database.MaxOpenConns < minPoolSize || c.Database.MaxOpenConns > maxPoolSize {
-		errs = append(errs, fmt.Errorf("DB_MAX_OPEN_CONNS must be between %d and %d, got %d",
-			minPoolSize, maxPoolSize, c.Database.MaxOpenConns))
+	if c.Database.MaxConns < minPoolSize || c.Database.MaxConns > maxPoolSize {
+		errs = append(errs, fmt.Errorf("DB_MAX_CONNS must be between %d and %d, got %d",
+			minPoolSize, maxPoolSize, c.Database.MaxConns))
 	}
 
-	if c.Database.MaxIdleConns < minPoolSize || c.Database.MaxIdleConns > maxPoolSize {
-		errs = append(errs, fmt.Errorf("DB_MAX_IDLE_CONNS must be between %d and %d, got %d",
-			minPoolSize, maxPoolSize, c.Database.MaxIdleConns))
+	if c.Database.MinConns < 0 || c.Database.MinConns > maxPoolSize {
+		errs = append(errs, fmt.Errorf("DB_MIN_CONNS must be between 0 and %d, got %d",
+			maxPoolSize, c.Database.MinConns))
 	}
 
-	if c.Database.MaxIdleConns > c.Database.MaxOpenConns {
-		errs = append(errs, fmt.Errorf("DB_MAX_IDLE_CONNS (%d) cannot exceed DB_MAX_OPEN_CONNS (%d)",
-			c.Database.MaxIdleConns, c.Database.MaxOpenConns))
+	if c.Database.MinConns > c.Database.MaxConns {
+		errs = append(errs, fmt.Errorf("DB_MIN_CONNS (%d) cannot exceed DB_MAX_CONNS (%d)",
+			c.Database.MinConns, c.Database.MaxConns))
 	}
 
 	if len(errs) > 0 {

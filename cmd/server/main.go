@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/onlyspans/events/internal/app"
 	"github.com/onlyspans/events/internal/config"
 )

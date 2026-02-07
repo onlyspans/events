@@ -7,7 +7,8 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/onlyspans/events/internal/migrator"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -17,7 +18,8 @@ import (
 // PostgresContainer wraps a testcontainers PostgreSQL instance
 type PostgresContainer struct {
 	Container *postgres.PostgresContainer
-	DB        *sql.DB
+	Pool      *pgxpool.Pool // Primary interface for pgx
+	DB        *sql.DB       // Keep for backward compatibility
 	DSN       string
 }
 
@@ -57,11 +59,35 @@ func SetupPostgres(t *testing.T) *PostgresContainer {
 		t.Fatalf("failed to get connection string: %v", err)
 	}
 
-	// Connect to database
-	db, err := sql.Open("postgres", dsn)
+	// Parse connection config
+	poolConfig, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
-		t.Fatalf("failed to connect to database: %v", err)
+		t.Fatalf("failed to parse DSN: %v", err)
 	}
+
+	// Configure connection pool for testing
+	poolConfig.MaxConns = 5
+	poolConfig.MinConns = 2
+	poolConfig.MaxConnLifetime = 5 * time.Minute
+
+	// Create connection pool
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
+	if err != nil {
+		t.Fatalf("failed to create connection pool: %v", err)
+	}
+
+	// Cleanup pool connection
+	t.Cleanup(func() {
+		pool.Close()
+	})
+
+	// Test connection
+	if err := pool.Ping(ctx); err != nil {
+		t.Fatalf("failed to ping database: %v", err)
+	}
+
+	// Create database/sql connection for backward compatibility
+	db := stdlib.OpenDBFromPool(pool)
 
 	// Cleanup database connection
 	t.Cleanup(func() {
@@ -70,18 +96,9 @@ func SetupPostgres(t *testing.T) *PostgresContainer {
 		}
 	})
 
-	// Configure connection pool
-	db.SetMaxOpenConns(5)
-	db.SetMaxIdleConns(2)
-	db.SetConnMaxLifetime(5 * time.Minute)
-
-	// Test connection
-	if err := db.PingContext(ctx); err != nil {
-		t.Fatalf("failed to ping database: %v", err)
-	}
-
 	return &PostgresContainer{
 		Container: pgContainer,
+		Pool:      pool,
 		DB:        db,
 		DSN:       dsn,
 	}
@@ -108,7 +125,7 @@ func (pc *PostgresContainer) TruncateTables(t *testing.T, tables ...string) {
 	ctx := context.Background()
 	for _, table := range tables {
 		query := fmt.Sprintf("TRUNCATE TABLE %s RESTART IDENTITY CASCADE", table)
-		if _, err := pc.DB.ExecContext(ctx, query); err != nil {
+		if _, err := pc.Pool.Exec(ctx, query); err != nil {
 			t.Errorf("failed to truncate table %s: %v", table, err)
 		}
 	}

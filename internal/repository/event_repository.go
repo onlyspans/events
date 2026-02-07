@@ -2,12 +2,13 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/onlyspans/events/internal/domain"
 	"github.com/onlyspans/events/internal/ports"
 )
@@ -15,14 +16,32 @@ import (
 // Compile-time check that EventRepository implements ports.EventRepository.
 var _ ports.EventRepository = (*EventRepository)(nil)
 
+// queryBuilder helps build SQL WHERE clauses with safe placeholder tracking.
+type queryBuilder struct {
+	conditions []string
+	args       []interface{}
+}
+
+// add appends a condition with its argument, automatically tracking the placeholder index.
+func (qb *queryBuilder) add(column string, value interface{}) {
+	qb.conditions = append(qb.conditions, fmt.Sprintf("%s = $%d", column, len(qb.args)+1))
+	qb.args = append(qb.args, value)
+}
+
+// addRange appends a comparison condition (e.g., >=, <=) with its argument.
+func (qb *queryBuilder) addRange(column string, operator string, value interface{}) {
+	qb.conditions = append(qb.conditions, fmt.Sprintf("%s %s $%d", column, operator, len(qb.args)+1))
+	qb.args = append(qb.args, value)
+}
+
 // EventRepository handles event data access operations.
 type EventRepository struct {
-	db *sql.DB
+	pool *pgxpool.Pool
 }
 
 // NewEventRepository creates a new EventRepository.
-func NewEventRepository(db *sql.DB) *EventRepository {
-	return &EventRepository{db: db}
+func NewEventRepository(pool *pgxpool.Pool) *EventRepository {
+	return &EventRepository{pool: pool}
 }
 
 // Create inserts a single event into the database and returns its ID.
@@ -37,18 +56,18 @@ func (r *EventRepository) Create(ctx context.Context, event *domain.Event) (uuid
 	`
 
 	var id uuid.UUID
-	err := r.db.QueryRowContext(ctx, query,
+	err := r.pool.QueryRow(ctx, query,
 		event.ID,
 		event.Timestamp,
-		nullString(event.User),
-		nullString(event.Category),
-		nullString(event.Action),
-		nullString(event.DocumentName),
-		nullString(event.Project),
-		nullString(event.Environment),
-		nullString(event.Tenant),
-		nullString(event.CorrelationID),
-		nullString(event.TraceID),
+		toNullable(event.User),
+		toNullable(event.Category),
+		toNullable(event.Action),
+		toNullable(event.DocumentName),
+		toNullable(event.Project),
+		toNullable(event.Environment),
+		toNullable(event.Tenant),
+		toNullable(event.CorrelationID),
+		toNullable(event.TraceID),
 		event.Details,
 	).Scan(&id)
 
@@ -59,51 +78,48 @@ func (r *EventRepository) Create(ctx context.Context, event *domain.Event) (uuid
 	return id, nil
 }
 
-// SaveBatch saves multiple events in a single transaction for efficiency.
+// SaveBatch saves multiple events using pgx Batch API for optimal performance.
+// This eliminates the need for transactions and prepared statements,
+// sending all inserts in a single network round trip.
 func (r *EventRepository) SaveBatch(ctx context.Context, events []*domain.Event) error {
 	if len(events) == 0 {
 		return nil
 	}
 
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	stmt, err := tx.PrepareContext(ctx, `
+	query := `
 		INSERT INTO events (
 			id, timestamp, user_name, category, action, document_name,
 			project, environment, tenant, correlation_id, trace_id, details
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-	`)
-	if err != nil {
-		return fmt.Errorf("failed to prepare statement: %w", err)
-	}
-	defer stmt.Close()
+	`
 
+	batch := &pgx.Batch{}
 	for _, event := range events {
-		_, err := stmt.ExecContext(ctx,
+		batch.Queue(query,
 			event.ID,
 			event.Timestamp,
-			nullString(event.User),
-			nullString(event.Category),
-			nullString(event.Action),
-			nullString(event.DocumentName),
-			nullString(event.Project),
-			nullString(event.Environment),
-			nullString(event.Tenant),
-			nullString(event.CorrelationID),
-			nullString(event.TraceID),
+			toNullable(event.User),
+			toNullable(event.Category),
+			toNullable(event.Action),
+			toNullable(event.DocumentName),
+			toNullable(event.Project),
+			toNullable(event.Environment),
+			toNullable(event.Tenant),
+			toNullable(event.CorrelationID),
+			toNullable(event.TraceID),
 			event.Details,
 		)
-		if err != nil {
-			return fmt.Errorf("failed to insert event: %w", err)
-		}
 	}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
+	br := r.pool.SendBatch(ctx, batch)
+	defer br.Close()
+
+	// Process all results to ensure all inserts complete
+	for i := 0; i < len(events); i++ {
+		_, err := br.Exec()
+		if err != nil {
+			return fmt.Errorf("failed to insert event at index %d: %w", i, err)
+		}
 	}
 
 	return nil
@@ -111,76 +127,52 @@ func (r *EventRepository) SaveBatch(ctx context.Context, events []*domain.Event)
 
 // Search retrieves events matching the query criteria with pagination.
 func (r *EventRepository) Search(ctx context.Context, query ports.EventSearchQuery) ([]*domain.Event, int64, error) {
-	// Build WHERE clause
-	var conditions []string
-	var args []interface{}
-	argIndex := 1
+	// Build WHERE clause using query builder
+	qb := &queryBuilder{}
 
 	if query.User != "" {
-		conditions = append(conditions, fmt.Sprintf("user_name = $%d", argIndex))
-		args = append(args, query.User)
-		argIndex++
+		qb.add("user_name", query.User)
 	}
 	if query.Category != "" {
-		conditions = append(conditions, fmt.Sprintf("category = $%d", argIndex))
-		args = append(args, query.Category)
-		argIndex++
+		qb.add("category", query.Category)
 	}
 	if query.Action != "" {
-		conditions = append(conditions, fmt.Sprintf("action = $%d", argIndex))
-		args = append(args, query.Action)
-		argIndex++
+		qb.add("action", query.Action)
 	}
 	if query.Document != "" {
-		conditions = append(conditions, fmt.Sprintf("document_name = $%d", argIndex))
-		args = append(args, query.Document)
-		argIndex++
+		qb.add("document_name", query.Document)
 	}
 	if query.Project != "" {
-		conditions = append(conditions, fmt.Sprintf("project = $%d", argIndex))
-		args = append(args, query.Project)
-		argIndex++
+		qb.add("project", query.Project)
 	}
 	if query.Environment != "" {
-		conditions = append(conditions, fmt.Sprintf("environment = $%d", argIndex))
-		args = append(args, query.Environment)
-		argIndex++
+		qb.add("environment", query.Environment)
 	}
 	if query.Tenant != "" {
-		conditions = append(conditions, fmt.Sprintf("tenant = $%d", argIndex))
-		args = append(args, query.Tenant)
-		argIndex++
+		qb.add("tenant", query.Tenant)
 	}
 	if query.CorrelationID != "" {
-		conditions = append(conditions, fmt.Sprintf("correlation_id = $%d", argIndex))
-		args = append(args, query.CorrelationID)
-		argIndex++
+		qb.add("correlation_id", query.CorrelationID)
 	}
 	if query.TraceID != "" {
-		conditions = append(conditions, fmt.Sprintf("trace_id = $%d", argIndex))
-		args = append(args, query.TraceID)
-		argIndex++
+		qb.add("trace_id", query.TraceID)
 	}
 	if query.StartDate != nil {
-		conditions = append(conditions, fmt.Sprintf("timestamp >= $%d", argIndex))
-		args = append(args, *query.StartDate)
-		argIndex++
+		qb.addRange("timestamp", ">=", *query.StartDate)
 	}
 	if query.EndDate != nil {
-		conditions = append(conditions, fmt.Sprintf("timestamp <= $%d", argIndex))
-		args = append(args, *query.EndDate)
-		argIndex++
+		qb.addRange("timestamp", "<=", *query.EndDate)
 	}
 
 	whereClause := ""
-	if len(conditions) > 0 {
-		whereClause = "WHERE " + strings.Join(conditions, " AND ")
+	if len(qb.conditions) > 0 {
+		whereClause = "WHERE " + strings.Join(qb.conditions, " AND ")
 	}
 
 	// Get total count
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM events %s", whereClause)
 	var total int64
-	err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	err := r.pool.QueryRow(ctx, countQuery, qb.args...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count events: %w", err)
 	}
@@ -234,11 +226,11 @@ func (r *EventRepository) Search(ctx context.Context, query ports.EventSearchQue
 		%s
 		ORDER BY %s %s
 		LIMIT $%d OFFSET $%d
-	`, whereClause, sortBy, sortOrder, argIndex, argIndex+1)
+	`, whereClause, sortBy, sortOrder, len(qb.args)+1, len(qb.args)+2)
 
-	args = append(args, size, offset)
+	qb.args = append(qb.args, size, offset)
 
-	rows, err := r.db.QueryContext(ctx, selectQuery, args...)
+	rows, err := r.pool.Query(ctx, selectQuery, qb.args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to query events: %w", err)
 	}
@@ -247,8 +239,8 @@ func (r *EventRepository) Search(ctx context.Context, query ports.EventSearchQue
 	var events []*domain.Event
 	for rows.Next() {
 		event := &domain.Event{}
-		var userName, category, action, documentName, project, environment, tenant, correlationID, traceID sql.NullString
-		var details sql.NullString
+		var userName, category, action, documentName, project, environment, tenant, correlationID, traceID *string
+		var details *domain.EventDetails
 
 		err := rows.Scan(
 			&event.ID,
@@ -269,22 +261,16 @@ func (r *EventRepository) Search(ctx context.Context, query ports.EventSearchQue
 			return nil, 0, fmt.Errorf("failed to scan event: %w", err)
 		}
 
-		event.User = userName.String
-		event.Category = category.String
-		event.Action = action.String
-		event.DocumentName = documentName.String
-		event.Project = project.String
-		event.Environment = environment.String
-		event.Tenant = tenant.String
-		event.CorrelationID = correlationID.String
-		event.TraceID = traceID.String
-
-		if details.Valid && details.String != "" {
-			var eventDetails domain.EventDetails
-			if err := eventDetails.Scan([]byte(details.String)); err == nil {
-				event.Details = &eventDetails
-			}
-		}
+		event.User = fromNullable(userName)
+		event.Category = fromNullable(category)
+		event.Action = fromNullable(action)
+		event.DocumentName = fromNullable(documentName)
+		event.Project = fromNullable(project)
+		event.Environment = fromNullable(environment)
+		event.Tenant = fromNullable(tenant)
+		event.CorrelationID = fromNullable(correlationID)
+		event.TraceID = fromNullable(traceID)
+		event.Details = details
 
 		events = append(events, event)
 	}
@@ -298,7 +284,7 @@ func (r *EventRepository) Search(ctx context.Context, query ports.EventSearchQue
 
 // DeleteOlderThan deletes events older than the specified cutoff date.
 func (r *EventRepository) DeleteOlderThan(ctx context.Context, cutoffDate time.Time) (int64, error) {
-	result, err := r.db.ExecContext(ctx,
+	tag, err := r.pool.Exec(ctx,
 		"DELETE FROM events WHERE timestamp < $1",
 		cutoffDate,
 	)
@@ -306,18 +292,21 @@ func (r *EventRepository) DeleteOlderThan(ctx context.Context, cutoffDate time.T
 		return 0, fmt.Errorf("failed to delete old events: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	return rowsAffected, nil
+	return tag.RowsAffected(), nil
 }
 
-// nullString converts an empty string to sql.NullString.
-func nullString(s string) sql.NullString {
+// toNullable converts an empty string to nil for pgx nullable handling.
+func toNullable(s string) *string {
 	if s == "" {
-		return sql.NullString{Valid: false}
+		return nil
 	}
-	return sql.NullString{String: s, Valid: true}
+	return &s
+}
+
+// fromNullable converts a nullable string pointer to a string value.
+func fromNullable(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
