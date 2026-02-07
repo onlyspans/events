@@ -56,14 +56,12 @@ const (
 )
 
 func Load() (*Config, error) {
-	// Load base configuration from configs/.env
 	if err := godotenv.Load("configs/.env"); err != nil {
 		slog.Debug("no configs/.env file found, using environment variables or defaults")
 	} else {
 		slog.Info("loaded configuration from configs/.env")
 	}
 
-	// Load local overrides from configs/.env.local (optional)
 	if err := godotenv.Load("configs/.env.local"); err != nil {
 		slog.Debug("no configs/.env.local file found")
 	} else {
@@ -72,22 +70,18 @@ func Load() (*Config, error) {
 
 	var cfg Config
 
-	// Process Features
 	if err := envconfig.Process("", &cfg.Features); err != nil {
 		return nil, fmt.Errorf("failed to process feature flags: %w", err)
 	}
 
-	// Process Database
 	if err := envconfig.Process("", &cfg.Database); err != nil {
 		return nil, fmt.Errorf("failed to process database config: %w", err)
 	}
 
-	// Process Kafka
 	if err := envconfig.Process("", &cfg.Kafka); err != nil {
 		return nil, fmt.Errorf("failed to process kafka config: %w", err)
 	}
 
-	// Process EventLog
 	if err := envconfig.Process("", &cfg.EventLog); err != nil {
 		return nil, fmt.Errorf("failed to process event log config: %w", err)
 	}
