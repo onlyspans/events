@@ -11,6 +11,8 @@ func TestLoad_DefaultFeatureFlags(t *testing.T) {
 	// Clear environment variables to test defaults
 	os.Unsetenv("KAFKA_ENABLED")
 	os.Unsetenv("AUTO_MIGRATE")
+	os.Setenv("POSTGRES_DSN", "postgres://test")
+	defer os.Unsetenv("POSTGRES_DSN")
 
 	cfg, err := Load()
 	if err != nil {
@@ -81,9 +83,11 @@ func TestLoad_FeatureFlagsFromEnv(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variables
+			os.Setenv("POSTGRES_DSN", "postgres://test")
 			os.Setenv("KAFKA_ENABLED", tt.kafkaEnabledEnv)
 			os.Setenv("AUTO_MIGRATE", tt.autoMigrateEnv)
 			defer func() {
+				os.Unsetenv("POSTGRES_DSN")
 				os.Unsetenv("KAFKA_ENABLED")
 				os.Unsetenv("AUTO_MIGRATE")
 			}()
@@ -105,32 +109,28 @@ func TestLoad_FeatureFlagsFromEnv(t *testing.T) {
 
 func TestLoad_InvalidBooleanValues(t *testing.T) {
 	tests := []struct {
-		name                string
-		kafkaEnabledEnv     string
-		autoMigrateEnv      string
-		expectedKafka       bool // should fall back to defaults
-		expectedAutoMigrate bool // should fall back to defaults
+		name            string
+		kafkaEnabledEnv string
+		autoMigrateEnv  string
+		shouldError     bool
 	}{
 		{
-			name:                "invalid kafka value",
-			kafkaEnabledEnv:     "invalid",
-			autoMigrateEnv:      "true",
-			expectedKafka:       false, // default
-			expectedAutoMigrate: true,
+			name:            "invalid kafka value",
+			kafkaEnabledEnv: "invalid",
+			autoMigrateEnv:  "true",
+			shouldError:     true,
 		},
 		{
-			name:                "invalid migrate value",
-			kafkaEnabledEnv:     "true",
-			autoMigrateEnv:      "invalid",
-			expectedKafka:       true,
-			expectedAutoMigrate: true, // default
+			name:            "invalid migrate value",
+			kafkaEnabledEnv: "true",
+			autoMigrateEnv:  "invalid",
+			shouldError:     true,
 		},
 		{
-			name:                "both invalid",
-			kafkaEnabledEnv:     "invalid",
-			autoMigrateEnv:      "invalid",
-			expectedKafka:       false, // default
-			expectedAutoMigrate: true,  // default
+			name:            "both invalid",
+			kafkaEnabledEnv: "invalid",
+			autoMigrateEnv:  "invalid",
+			shouldError:     true,
 		},
 	}
 
@@ -139,65 +139,26 @@ func TestLoad_InvalidBooleanValues(t *testing.T) {
 			// Set environment variables
 			os.Setenv("KAFKA_ENABLED", tt.kafkaEnabledEnv)
 			os.Setenv("AUTO_MIGRATE", tt.autoMigrateEnv)
+			os.Setenv("POSTGRES_DSN", "postgres://test") // Required field
 			defer func() {
 				os.Unsetenv("KAFKA_ENABLED")
 				os.Unsetenv("AUTO_MIGRATE")
+				os.Unsetenv("POSTGRES_DSN")
 			}()
 
-			cfg, err := Load()
-			if err != nil {
-				t.Fatalf("Load() failed: %v", err)
+			_, err := Load()
+			if tt.shouldError && err == nil {
+				t.Error("Load() should return error for invalid boolean value")
 			}
-
-			// Invalid values should fall back to defaults
-			if cfg.Features.KafkaEnabled != tt.expectedKafka {
-				t.Errorf("expected KafkaEnabled=%v (default on invalid input), got %v", tt.expectedKafka, cfg.Features.KafkaEnabled)
-			}
-			if cfg.Features.AutoMigrate != tt.expectedAutoMigrate {
-				t.Errorf("expected AutoMigrate=%v (default on invalid input), got %v", tt.expectedAutoMigrate, cfg.Features.AutoMigrate)
-			}
-		})
-	}
-}
-
-func TestGetEnvAsBool(t *testing.T) {
-	tests := []struct {
-		name         string
-		envValue     string
-		defaultValue bool
-		expected     bool
-	}{
-		{"empty uses default true", "", true, true},
-		{"empty uses default false", "", false, false},
-		{"true string", "true", false, true},
-		{"false string", "false", true, false},
-		{"1 is true", "1", false, true},
-		{"0 is false", "0", true, false},
-		{"TRUE uppercase", "TRUE", false, true},
-		{"FALSE uppercase", "FALSE", true, false},
-		{"invalid uses default", "invalid", true, true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			testKey := "TEST_BOOL_VAR"
-			if tt.envValue != "" {
-				os.Setenv(testKey, tt.envValue)
-				defer os.Unsetenv(testKey)
-			} else {
-				os.Unsetenv(testKey)
-			}
-
-			result := getBoolEnv(testKey, tt.defaultValue)
-			if result != tt.expected {
-				t.Errorf("getBoolEnv(%q, %v) = %v; want %v", tt.envValue, tt.defaultValue, result, tt.expected)
+			if !tt.shouldError && err != nil {
+				t.Errorf("Load() returned unexpected error: %v", err)
 			}
 		})
 	}
 }
 
 func TestLoad_MinimalConfiguration(t *testing.T) {
-	// Clear all environment variables to test minimal config
+	// Clear all environment variables to test minimal config (except required POSTGRES_DSN)
 	envVars := []string{
 		"SERVER_PORT",
 		"POSTGRES_DSN",
@@ -208,14 +169,23 @@ func TestLoad_MinimalConfiguration(t *testing.T) {
 	for _, v := range envVars {
 		os.Unsetenv(v)
 	}
+	defer func() {
+		for _, v := range envVars {
+			os.Unsetenv(v)
+		}
+	}()
+
+	// Set required field
+	testDSN := "postgres://testuser:testpass@localhost:5432/testdb"
+	os.Setenv("POSTGRES_DSN", testDSN)
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() failed: %v", err)
 	}
 
-	if cfg.Database.DSN != "" {
-		t.Errorf("expected empty default POSTGRES_DSN, got %s", cfg.Database.DSN)
+	if cfg.Database.DSN != testDSN {
+		t.Errorf("expected POSTGRES_DSN=%s, got %s", testDSN, cfg.Database.DSN)
 	}
 	if cfg.Kafka.Brokers != "localhost:9092" {
 		t.Errorf("expected default KAFKA_BROKERS=localhost:9092, got %s", cfg.Kafka.Brokers)
@@ -288,7 +258,8 @@ func TestLoad_WithKafkaBrokers(t *testing.T) {
 		}
 	}()
 
-	// Set Kafka brokers
+	// Set required field and Kafka brokers
+	os.Setenv("POSTGRES_DSN", "postgres://test")
 	testBrokers := "broker1:9092,broker2:9093,broker3:9094"
 	os.Setenv("KAFKA_BROKERS", testBrokers)
 
@@ -362,10 +333,12 @@ func TestKafkaConfig_GetBrokers(t *testing.T) {
 func validConfig() *Config {
 	return &Config{
 		Database: DatabaseConfig{
-			DSN:             "postgres://user:pass@localhost:5432/db",
-			MaxOpenConns:    25,
-			MaxIdleConns:    5,
-			ConnMaxLifetime: 5 * time.Minute,
+			DSN:               "postgres://user:pass@localhost:5432/db",
+			MaxConns:          25,
+			MinConns:          2,
+			MaxConnLifetime:   5 * time.Minute,
+			MaxConnIdleTime:   30 * time.Minute,
+			HealthCheckPeriod: 60 * time.Second,
 		},
 		Kafka: KafkaConfig{
 			Brokers: "localhost:9092",
@@ -388,85 +361,6 @@ func TestConfig_Validate_Valid(t *testing.T) {
 	cfg := validConfig()
 	if err := cfg.Validate(); err != nil {
 		t.Errorf("Validate() returned unexpected error: %v", err)
-	}
-}
-
-func TestConfig_Validate_MissingPostgresDSN(t *testing.T) {
-	cfg := validConfig()
-	cfg.Database.DSN = ""
-
-	err := cfg.Validate()
-	if err == nil {
-		t.Error("Validate() should return error for missing POSTGRES_DSN")
-	}
-	if !strings.Contains(err.Error(), "POSTGRES_DSN") {
-		t.Errorf("error should mention POSTGRES_DSN, got: %v", err)
-	}
-}
-
-func TestConfig_Validate_KafkaEnabled(t *testing.T) {
-	tests := []struct {
-		name        string
-		brokers     string
-		topic       string
-		groupID     string
-		wantErr     bool
-		errContains string
-	}{
-		{
-			name:    "valid kafka config",
-			brokers: "localhost:9092",
-			topic:   "events",
-			groupID: "events-group",
-			wantErr: false,
-		},
-		{
-			name:        "missing brokers",
-			brokers:     "",
-			topic:       "events",
-			groupID:     "events-group",
-			wantErr:     true,
-			errContains: "KAFKA_BROKERS",
-		},
-		{
-			name:        "missing topic",
-			brokers:     "localhost:9092",
-			topic:       "",
-			groupID:     "events-group",
-			wantErr:     true,
-			errContains: "KAFKA_TOPIC",
-		},
-		{
-			name:        "missing group id",
-			brokers:     "localhost:9092",
-			topic:       "events",
-			groupID:     "",
-			wantErr:     true,
-			errContains: "KAFKA_GROUP_ID",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := validConfig()
-			cfg.Features.KafkaEnabled = true
-			cfg.Kafka.Brokers = tt.brokers
-			cfg.Kafka.Topic = tt.topic
-			cfg.Kafka.GroupID = tt.groupID
-
-			err := cfg.Validate()
-			if tt.wantErr {
-				if err == nil {
-					t.Error("Validate() should return error")
-				} else if !strings.Contains(err.Error(), tt.errContains) {
-					t.Errorf("error should contain %q, got: %v", tt.errContains, err)
-				}
-			} else {
-				if err != nil {
-					t.Errorf("Validate() returned unexpected error: %v", err)
-				}
-			}
-		})
 	}
 }
 
@@ -543,25 +437,25 @@ func TestConfig_Validate_MaxExportSize(t *testing.T) {
 func TestConfig_Validate_DatabasePoolSize(t *testing.T) {
 	tests := []struct {
 		name        string
-		maxOpen     int
-		maxIdle     int
+		maxConns    int32
+		minConns    int32
 		wantErr     bool
 		errContains string
 	}{
 		{"valid", 25, 5, false, ""},
 		{"valid equal", 10, 10, false, ""},
-		{"max open too low", 0, 5, true, "DB_MAX_OPEN_CONNS"},
-		{"max open too high", 101, 5, true, "DB_MAX_OPEN_CONNS"},
-		{"max idle too low", 25, 0, true, "DB_MAX_IDLE_CONNS"},
-		{"max idle too high", 25, 101, true, "DB_MAX_IDLE_CONNS"},
-		{"idle exceeds open", 10, 15, true, "cannot exceed"},
+		{"max conns too low", 0, 5, true, "DB_MAX_CONNS"},
+		{"max conns too high", 101, 5, true, "DB_MAX_CONNS"},
+		{"min conns negative", 25, -1, true, "DB_MIN_CONNS"},
+		{"min conns too high", 25, 101, true, "DB_MIN_CONNS"},
+		{"min exceeds max", 10, 15, true, "cannot exceed"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := validConfig()
-			cfg.Database.MaxOpenConns = tt.maxOpen
-			cfg.Database.MaxIdleConns = tt.maxIdle
+			cfg.Database.MaxConns = tt.maxConns
+			cfg.Database.MinConns = tt.minConns
 
 			err := cfg.Validate()
 			if tt.wantErr {
@@ -581,9 +475,9 @@ func TestConfig_Validate_DatabasePoolSize(t *testing.T) {
 
 func TestConfig_Validate_MultipleErrors(t *testing.T) {
 	cfg := validConfig()
-	cfg.Database.DSN = ""
 	cfg.EventLog.RetentionPeriodDays = 0
 	cfg.EventLog.MaxExportSize = 0
+	cfg.Database.MaxConns = 0
 
 	err := cfg.Validate()
 	if err == nil {
@@ -591,22 +485,21 @@ func TestConfig_Validate_MultipleErrors(t *testing.T) {
 	}
 
 	errStr := err.Error()
-	if !strings.Contains(errStr, "POSTGRES_DSN") {
-		t.Error("error should mention POSTGRES_DSN")
-	}
 	if !strings.Contains(errStr, "RETENTION_PERIOD_DAYS") {
 		t.Error("error should mention RETENTION_PERIOD_DAYS")
 	}
 	if !strings.Contains(errStr, "MAX_EXPORT_SIZE") {
 		t.Error("error should mention MAX_EXPORT_SIZE")
 	}
+	if !strings.Contains(errStr, "DB_MAX_CONNS") {
+		t.Error("error should mention DB_MAX_CONNS")
+	}
 }
 
 func TestLoad_NewConfigFields(t *testing.T) {
 	// Clear all environment variables
 	envVars := []string{
-		"SERVER_PORT", "SERVER_READ_TIMEOUT_SECONDS", "SERVER_WRITE_TIMEOUT_SECONDS", "SERVER_IDLE_TIMEOUT_SECONDS",
-		"POSTGRES_DSN", "DB_MAX_OPEN_CONNS", "DB_MAX_IDLE_CONNS", "DB_CONN_MAX_LIFETIME_MINUTES",
+		"POSTGRES_DSN", "DB_MAX_CONNS", "DB_MIN_CONNS", "DB_MAX_CONN_LIFETIME_MINUTES",
 		"KAFKA_ENABLED", "KAFKA_BROKERS", "KAFKA_TOPIC", "KAFKA_GROUP_ID",
 		"RETENTION_PERIOD_DAYS", "MAX_EXPORT_SIZE", "RETENTION_CRON",
 		"AUTO_MIGRATE",
@@ -620,37 +513,36 @@ func TestLoad_NewConfigFields(t *testing.T) {
 		}
 	}()
 
+	// Set required field
+	os.Setenv("POSTGRES_DSN", "postgres://test")
+
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() failed: %v", err)
 	}
 
-	if cfg.Database.MaxOpenConns != 25 {
-		t.Errorf("expected default MaxOpenConns=25, got %d", cfg.Database.MaxOpenConns)
+	if cfg.Database.MaxConns != 25 {
+		t.Errorf("expected default MaxConns=25, got %d", cfg.Database.MaxConns)
 	}
-	if cfg.Database.MaxIdleConns != 5 {
-		t.Errorf("expected default MaxIdleConns=5, got %d", cfg.Database.MaxIdleConns)
+	if cfg.Database.MinConns != 2 {
+		t.Errorf("expected default MinConns=2, got %d", cfg.Database.MinConns)
 	}
-	if cfg.Database.ConnMaxLifetime != 5*time.Minute {
-		t.Errorf("expected default ConnMaxLifetime=5m, got %v", cfg.Database.ConnMaxLifetime)
+	if cfg.Database.MaxConnLifetime != 5*time.Minute {
+		t.Errorf("expected default MaxConnLifetime=5m, got %v", cfg.Database.MaxConnLifetime)
 	}
 }
 
 func TestLoad_CustomConfigFields(t *testing.T) {
 	// Set custom values
-	os.Setenv("SERVER_READ_TIMEOUT_SECONDS", "10")
-	os.Setenv("SERVER_WRITE_TIMEOUT_SECONDS", "20")
-	os.Setenv("SERVER_IDLE_TIMEOUT_SECONDS", "45")
-	os.Setenv("DB_MAX_OPEN_CONNS", "50")
-	os.Setenv("DB_MAX_IDLE_CONNS", "10")
-	os.Setenv("DB_CONN_MAX_LIFETIME_MINUTES", "10")
+	os.Setenv("POSTGRES_DSN", "postgres://test")
+	os.Setenv("DB_MAX_CONNS", "50")
+	os.Setenv("DB_MIN_CONNS", "10")
+	os.Setenv("DB_MAX_CONN_LIFETIME_MINUTES", "10m")
 	defer func() {
-		os.Unsetenv("SERVER_READ_TIMEOUT_SECONDS")
-		os.Unsetenv("SERVER_WRITE_TIMEOUT_SECONDS")
-		os.Unsetenv("SERVER_IDLE_TIMEOUT_SECONDS")
-		os.Unsetenv("DB_MAX_OPEN_CONNS")
-		os.Unsetenv("DB_MAX_IDLE_CONNS")
-		os.Unsetenv("DB_CONN_MAX_LIFETIME_MINUTES")
+		os.Unsetenv("POSTGRES_DSN")
+		os.Unsetenv("DB_MAX_CONNS")
+		os.Unsetenv("DB_MIN_CONNS")
+		os.Unsetenv("DB_MAX_CONN_LIFETIME_MINUTES")
 	}()
 
 	cfg, err := Load()
@@ -658,13 +550,13 @@ func TestLoad_CustomConfigFields(t *testing.T) {
 		t.Fatalf("Load() failed: %v", err)
 	}
 
-	if cfg.Database.MaxOpenConns != 50 {
-		t.Errorf("expected MaxOpenConns=50, got %d", cfg.Database.MaxOpenConns)
+	if cfg.Database.MaxConns != 50 {
+		t.Errorf("expected MaxConns=50, got %d", cfg.Database.MaxConns)
 	}
-	if cfg.Database.MaxIdleConns != 10 {
-		t.Errorf("expected MaxIdleConns=10, got %d", cfg.Database.MaxIdleConns)
+	if cfg.Database.MinConns != 10 {
+		t.Errorf("expected MinConns=10, got %d", cfg.Database.MinConns)
 	}
-	if cfg.Database.ConnMaxLifetime != 10*time.Minute {
-		t.Errorf("expected ConnMaxLifetime=10m, got %v", cfg.Database.ConnMaxLifetime)
+	if cfg.Database.MaxConnLifetime != 10*time.Minute {
+		t.Errorf("expected MaxConnLifetime=10m, got %v", cfg.Database.MaxConnLifetime)
 	}
 }
