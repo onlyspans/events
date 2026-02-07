@@ -13,9 +13,9 @@ import (
 	"github.com/onlyspans/events/internal/consumer"
 	"github.com/onlyspans/events/internal/handler"
 	"github.com/onlyspans/events/internal/http/middleware"
-	"github.com/onlyspans/events/internal/migrator"
 	"github.com/onlyspans/events/internal/repository"
 	"github.com/onlyspans/events/internal/service"
+	"github.com/onlyspans/events/migrations"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -102,7 +102,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 	}()
 
 	if cfg.Features.AutoMigrate {
-		if err := migrator.Run(cfg.Database.DSN); err != nil {
+		if err := migrations.Run(cfg.Database.DSN); err != nil {
 			pool.Close()
 			return nil, err
 		}

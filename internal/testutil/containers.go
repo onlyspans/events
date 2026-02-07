@@ -9,7 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
-	"github.com/onlyspans/events/internal/migrator"
+	"github.com/onlyspans/events/migrations"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -111,7 +111,7 @@ func SetupPostgresWithMigrations(t *testing.T) *PostgresContainer {
 	pc := SetupPostgres(t)
 
 	// Run migrations
-	if err := migrator.Run(pc.DSN); err != nil {
+	if err := migrations.Run(pc.DSN); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
 

@@ -9,8 +9,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/onlyspans/events/internal/domain"
-	"github.com/onlyspans/events/internal/migrator"
 	"github.com/onlyspans/events/internal/ports"
+	"github.com/onlyspans/events/migrations"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -42,8 +42,8 @@ func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 		t.Fatalf("failed to get connection string: %v", err)
 	}
 
-	// Run embedded migrations using the migrator package
-	if err := migrator.Run(connStr); err != nil {
+	// Run migrations from migrations directory
+	if err := migrations.Run(connStr); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
 

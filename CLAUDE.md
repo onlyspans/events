@@ -202,7 +202,7 @@ The retention service runs as a cron job within the service binary:
 
 1. Update `domain.Event` struct in `internal/domain/event.go`
 2. Update `dto.EventDTO` in `internal/dto/event.go` if exposed in API
-3. Create migration in `internal/migrator/` to add column and index if needed (e.g., `000003_add_new_field.up.sql` and `000003_add_new_field.down.sql`)
+3. Create migration in `migrations/` to add column and index if needed (e.g., `000003_add_new_field.up.sql` and `000003_add_new_field.down.sql`)
 4. Update repository queries in `internal/repository/event_repository.go`
 
 ### Modifying Search Filters
@@ -225,7 +225,7 @@ The project uses a two-tier testing approach:
 ### Integration Tests (`internal/repository/*_integration_test.go`)
 - Use **testcontainers-go** to spin up real PostgreSQL containers
 - Test database queries, indexes, and JSONB operations
-- Migrations loaded via `internal/migrator` package - uses embedded migration files
+- Migrations loaded via `migrations` package from `migrations/` directory
 - Containers are automatically created and destroyed per test
 - Requires Docker daemon running locally
 
@@ -249,11 +249,11 @@ make test
 - Uses actual migration files (single source of truth)
 
 **How migrations work in tests:**
-- Migrations are embedded in the `internal/migrator` package via `//go:embed *.sql`
-- All `.up.sql` and `.down.sql` files are embedded at compile time
+- Migrations are stored in the `migrations/` directory at project root
+- All `.up.sql` and `.down.sql` files are loaded from the filesystem
 - Files execute in alphabetical order (works because migrations are prefixed: 000001, 000002, etc.)
-- Adding new migrations requires zero test code changes - just add new .sql files to `internal/migrator/`
-- Migrations use the same embedded files in both tests and production
+- Adding new migrations requires zero test code changes - just add new .sql files to `migrations/`
+- Migrations use golang-migrate's standard file-based approach
 
 ## CI/CD
 
