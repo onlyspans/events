@@ -148,7 +148,7 @@ func TestChain(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	chain := Chain(first, second)
+	chain := Pipeline(first, second)
 	wrapped := chain(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
@@ -173,7 +173,7 @@ func TestChain_Empty(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	chain := Chain()
+	chain := Pipeline()
 	wrapped := chain(handler)
 
 	req := httptest.NewRequest(http.MethodGet, "/test", nil)
