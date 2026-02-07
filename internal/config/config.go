@@ -26,11 +26,11 @@ type FeatureFlags struct {
 
 type DatabaseConfig struct {
 	DSN               string
-	MaxConns          int32         // Maximum number of connections (replaces MaxOpenConns)
-	MinConns          int32         // Minimum number of idle connections (replaces MaxIdleConns)
-	MaxConnLifetime   time.Duration // Maximum connection lifetime (replaces ConnMaxLifetime)
-	MaxConnIdleTime   time.Duration // Maximum connection idle time
-	HealthCheckPeriod time.Duration // Connection health check interval
+	MaxConns          int32
+	MinConns          int32
+	MaxConnLifetime   time.Duration
+	MaxConnIdleTime   time.Duration
+	HealthCheckPeriod time.Duration
 }
 
 type KafkaConfig struct {
