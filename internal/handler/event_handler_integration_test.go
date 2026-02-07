@@ -3,7 +3,6 @@ package handler
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -12,9 +11,10 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/onlyspans/events/internal/dto"
-	"github.com/onlyspans/events/internal/migrator"
+	"github.com/onlyspans/events/internal/migrations"
 	"github.com/onlyspans/events/internal/repository"
 	"github.com/onlyspans/events/internal/service"
 	"github.com/testcontainers/testcontainers-go"
@@ -22,7 +22,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func setupTestDB(t *testing.T) (*sql.DB, func()) {
+func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -48,34 +48,34 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 		t.Fatalf("failed to get connection string: %v", err)
 	}
 
-	// Run embedded migrations using the migrator package
-	if err := migrator.Run(connStr); err != nil {
+	// Run migrations from migrations directory
+	if err := migrations.Run(connStr); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
 
-	// Connect to database
-	db, err := sql.Open("postgres", connStr)
+	// Create connection pool
+	pool, err := pgxpool.New(ctx, connStr)
 	if err != nil {
-		t.Fatalf("failed to connect to database: %v", err)
+		t.Fatalf("failed to create connection pool: %v", err)
 	}
 
 	// Cleanup function
 	cleanup := func() {
-		db.Close()
+		pool.Close()
 		if err := pgContainer.Terminate(ctx); err != nil {
 			t.Errorf("failed to terminate container: %v", err)
 		}
 	}
 
-	return db, cleanup
+	return pool, cleanup
 }
 
 func TestEventHandler_IngestEvent(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	pool, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// Setup dependencies
-	eventRepo := repository.NewEventRepository(db)
+	eventRepo := repository.NewEventRepository(pool)
 	eventService := service.NewEventService(eventRepo, 10000) // maxExportSize = 10000
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	handler := NewEventHandler(eventService, logger)
@@ -116,8 +116,8 @@ func TestEventHandler_IngestEvent(t *testing.T) {
 			checkResponse:  nil,
 		},
 		{
-			name: "invalid json",
-			requestBody: "invalid json",
+			name:           "invalid json",
+			requestBody:    "invalid json",
 			expectedStatus: http.StatusBadRequest,
 			checkResponse:  nil,
 		},
@@ -159,11 +159,11 @@ func TestEventHandler_IngestEvent(t *testing.T) {
 }
 
 func TestEventHandler_IngestEventsBatch(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	pool, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// Setup dependencies
-	eventRepo := repository.NewEventRepository(db)
+	eventRepo := repository.NewEventRepository(pool)
 	eventService := service.NewEventService(eventRepo, 10000) // maxExportSize = 10000
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	handler := NewEventHandler(eventService, logger)
@@ -305,11 +305,11 @@ func TestEventHandler_IngestEventsBatch(t *testing.T) {
 }
 
 func TestEventHandler_IngestEvent_MethodNotAllowed(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	pool, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// Setup dependencies
-	eventRepo := repository.NewEventRepository(db)
+	eventRepo := repository.NewEventRepository(pool)
 	eventService := service.NewEventService(eventRepo, 10000) // maxExportSize = 10000
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	handler := NewEventHandler(eventService, logger)
@@ -326,11 +326,11 @@ func TestEventHandler_IngestEvent_MethodNotAllowed(t *testing.T) {
 }
 
 func TestEventHandler_IngestEventsBatch_MethodNotAllowed(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	pool, cleanup := setupTestDB(t)
 	defer cleanup()
 
 	// Setup dependencies
-	eventRepo := repository.NewEventRepository(db)
+	eventRepo := repository.NewEventRepository(pool)
 	eventService := service.NewEventService(eventRepo, 10000) // maxExportSize = 10000
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	handler := NewEventHandler(eventService, logger)

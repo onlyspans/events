@@ -2,9 +2,11 @@ package repository
 
 import (
 	"context"
-	"database/sql"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/onlyspans/events/internal/domain"
 	"github.com/onlyspans/events/internal/ports"
 )
@@ -14,30 +16,31 @@ var _ ports.SettingsRepository = (*SettingsRepository)(nil)
 
 // SettingsRepository handles settings data access operations.
 type SettingsRepository struct {
-	db *sql.DB
+	pool *pgxpool.Pool
 }
 
 // NewSettingsRepository creates a new SettingsRepository.
-func NewSettingsRepository(db *sql.DB) *SettingsRepository {
-	return &SettingsRepository{db: db}
+func NewSettingsRepository(pool *pgxpool.Pool) *SettingsRepository {
+	return &SettingsRepository{pool: pool}
 }
 
 // Get retrieves the global settings.
 func (r *SettingsRepository) Get(ctx context.Context) (*domain.Settings, error) {
 	settings := &domain.Settings{}
 
-	err := r.db.QueryRowContext(ctx, `
-		SELECT id, retention_period_days, updated_at, updated_by
+	err := r.pool.QueryRow(ctx, `
+		SELECT id, retention_period_days, max_export_size, updated_at, updated_by
 		FROM settings
 		WHERE id = $1
 	`, domain.GlobalSettingsID).Scan(
 		&settings.ID,
 		&settings.RetentionPeriodDays,
+		&settings.MaxExportSize,
 		&settings.UpdatedAt,
 		&settings.UpdatedBy,
 	)
 
-	if err == sql.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
@@ -49,16 +52,18 @@ func (r *SettingsRepository) Get(ctx context.Context) (*domain.Settings, error) 
 
 // Save saves or updates the settings.
 func (r *SettingsRepository) Save(ctx context.Context, settings *domain.Settings) error {
-	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO settings (id, retention_period_days, updated_at, updated_by)
-		VALUES ($1, $2, $3, $4)
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO settings (id, retention_period_days, max_export_size, updated_at, updated_by)
+		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (id) DO UPDATE SET
 			retention_period_days = EXCLUDED.retention_period_days,
+			max_export_size = EXCLUDED.max_export_size,
 			updated_at = EXCLUDED.updated_at,
 			updated_by = EXCLUDED.updated_by
 	`,
 		settings.ID,
 		settings.RetentionPeriodDays,
+		settings.MaxExportSize,
 		settings.UpdatedAt,
 		settings.UpdatedBy,
 	)

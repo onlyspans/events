@@ -1,0 +1,4 @@
+{
+  "retention_period_days": 90,
+  "max_export_size": 10000
+}

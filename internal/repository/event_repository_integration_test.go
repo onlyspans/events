@@ -2,21 +2,21 @@ package repository
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/onlyspans/events/internal/domain"
-	"github.com/onlyspans/events/internal/migrator"
+	"github.com/onlyspans/events/internal/migrations"
 	"github.com/onlyspans/events/internal/ports"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func setupTestDB(t *testing.T) (*sql.DB, func()) {
+func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 	t.Helper()
 
 	ctx := context.Background()
@@ -42,40 +42,40 @@ func setupTestDB(t *testing.T) (*sql.DB, func()) {
 		t.Fatalf("failed to get connection string: %v", err)
 	}
 
-	// Run embedded migrations using the migrator package
-	if err := migrator.Run(connStr); err != nil {
+	// Run migrations from migrations directory
+	if err := migrations.Run(connStr); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
 
-	// Connect to database
-	db, err := sql.Open("postgres", connStr)
+	// Create connection pool
+	pool, err := pgxpool.New(ctx, connStr)
 	if err != nil {
-		t.Fatalf("failed to connect to database: %v", err)
+		t.Fatalf("failed to create connection pool: %v", err)
 	}
 
 	// Cleanup function
 	cleanup := func() {
-		db.Close()
+		pool.Close()
 		if err := pgContainer.Terminate(ctx); err != nil {
 			t.Errorf("failed to terminate container: %v", err)
 		}
 	}
 
-	return db, cleanup
+	return pool, cleanup
 }
 
 func TestEventRepository_Create(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	pool, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	repo := NewEventRepository(db)
+	repo := NewEventRepository(pool)
 	ctx := context.Background()
 
 	tests := []struct {
 		name    string
 		event   *domain.Event
 		wantErr bool
-		verify  func(t *testing.T, db *sql.DB, id uuid.UUID)
+		verify  func(t *testing.T, pool *pgxpool.Pool, id uuid.UUID)
 	}{
 		{
 			name: "create single event with required fields",
@@ -87,9 +87,9 @@ func TestEventRepository_Create(t *testing.T) {
 				Action:    "test-action",
 			},
 			wantErr: false,
-			verify: func(t *testing.T, db *sql.DB, id uuid.UUID) {
+			verify: func(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) {
 				var user, category, action string
-				err := db.QueryRowContext(ctx,
+				err := pool.QueryRow(ctx,
 					"SELECT user_name, category, action FROM events WHERE id = $1",
 					id).Scan(&user, &category, &action)
 				if err != nil {
@@ -116,9 +116,9 @@ func TestEventRepository_Create(t *testing.T) {
 				TraceID:       "trace-456",
 			},
 			wantErr: false,
-			verify: func(t *testing.T, db *sql.DB, id uuid.UUID) {
+			verify: func(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) {
 				var count int
-				err := db.QueryRowContext(ctx,
+				err := pool.QueryRow(ctx,
 					"SELECT COUNT(*) FROM events WHERE id = $1 AND project = $2 AND environment = $3",
 					id, "project1", "production").Scan(&count)
 				if err != nil {
@@ -138,8 +138,8 @@ func TestEventRepository_Create(t *testing.T) {
 				Category:  "test-category",
 				Action:    "test-action",
 				Details: &domain.EventDetails{
-					IPAddress: "192.168.1.1",
-					UserAgent: "Test Agent/1.0",
+					IPAddress:      "192.168.1.1",
+					UserAgent:      "Test Agent/1.0",
 					AdditionalInfo: "Additional test info",
 					Changes: []domain.Change{
 						{Field: "status", OldValue: "active", NewValue: "inactive"},
@@ -148,9 +148,9 @@ func TestEventRepository_Create(t *testing.T) {
 				},
 			},
 			wantErr: false,
-			verify: func(t *testing.T, db *sql.DB, id uuid.UUID) {
+			verify: func(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) {
 				var detailsJSON []byte
-				err := db.QueryRowContext(ctx,
+				err := pool.QueryRow(ctx,
 					"SELECT details FROM events WHERE id = $1",
 					id).Scan(&detailsJSON)
 				if err != nil {
@@ -162,7 +162,7 @@ func TestEventRepository_Create(t *testing.T) {
 
 				// Verify JSONB can be queried
 				var ipAddress string
-				err = db.QueryRowContext(ctx,
+				err = pool.QueryRow(ctx,
 					"SELECT details->>'ipAddress' FROM events WHERE id = $1",
 					id).Scan(&ipAddress)
 				if err != nil {
@@ -184,15 +184,15 @@ func TestEventRepository_Create(t *testing.T) {
 				Details:   nil,
 			},
 			wantErr: false,
-			verify: func(t *testing.T, db *sql.DB, id uuid.UUID) {
-				var details sql.NullString
-				err := db.QueryRowContext(ctx,
+			verify: func(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) {
+				var details *string
+				err := pool.QueryRow(ctx,
 					"SELECT details FROM events WHERE id = $1",
 					id).Scan(&details)
 				if err != nil {
 					t.Fatalf("failed to verify event: %v", err)
 				}
-				if details.Valid {
+				if details != nil {
 					t.Error("expected NULL details, got non-NULL value")
 				}
 			},
@@ -209,15 +209,15 @@ func TestEventRepository_Create(t *testing.T) {
 				Environment: "", // Empty optional field
 			},
 			wantErr: false,
-			verify: func(t *testing.T, db *sql.DB, id uuid.UUID) {
-				var project, environment sql.NullString
-				err := db.QueryRowContext(ctx,
+			verify: func(t *testing.T, pool *pgxpool.Pool, id uuid.UUID) {
+				var project, environment *string
+				err := pool.QueryRow(ctx,
 					"SELECT project, environment FROM events WHERE id = $1",
 					id).Scan(&project, &environment)
 				if err != nil {
 					t.Fatalf("failed to verify event: %v", err)
 				}
-				if project.Valid || environment.Valid {
+				if project != nil || environment != nil {
 					t.Error("expected NULL for empty optional fields")
 				}
 			},
@@ -241,7 +241,7 @@ func TestEventRepository_Create(t *testing.T) {
 				}
 
 				if tt.verify != nil {
-					tt.verify(t, db, id)
+					tt.verify(t, pool, id)
 				}
 			}
 		})
@@ -249,10 +249,10 @@ func TestEventRepository_Create(t *testing.T) {
 }
 
 func TestEventRepository_SaveBatch(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	pool, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	repo := NewEventRepository(db)
+	repo := NewEventRepository(pool)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -331,7 +331,7 @@ func TestEventRepository_SaveBatch(t *testing.T) {
 			// Verify events were saved
 			if !tt.wantErr && len(tt.events) > 0 {
 				var count int
-				err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM events WHERE user_name = $1", tt.events[0].User).Scan(&count)
+				err := pool.QueryRow(ctx, "SELECT COUNT(*) FROM events WHERE user_name = $1", tt.events[0].User).Scan(&count)
 				if err != nil {
 					t.Errorf("failed to verify saved events: %v", err)
 				}
@@ -344,10 +344,10 @@ func TestEventRepository_SaveBatch(t *testing.T) {
 }
 
 func TestEventRepository_Search(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	pool, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	repo := NewEventRepository(db)
+	repo := NewEventRepository(pool)
 	ctx := context.Background()
 
 	// Insert test events
@@ -477,10 +477,10 @@ func TestEventRepository_Search(t *testing.T) {
 }
 
 func TestEventRepository_DeleteOlderThan(t *testing.T) {
-	db, cleanup := setupTestDB(t)
+	pool, cleanup := setupTestDB(t)
 	defer cleanup()
 
-	repo := NewEventRepository(db)
+	repo := NewEventRepository(pool)
 	ctx := context.Background()
 
 	now := time.Now()

@@ -37,11 +37,6 @@ func NewEventHandler(eventService ports.EventService, logger *slog.Logger) *Even
 
 // SearchEvents handles POST /events requests.
 func (h *EventHandler) SearchEvents(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		response.MethodNotAllowed(w)
-		return
-	}
-
 	var req dto.SearchEventsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Error("failed to decode search request", "error", err)
@@ -72,11 +67,6 @@ func (h *EventHandler) SearchEvents(w http.ResponseWriter, r *http.Request) {
 
 // ExportEvents handles POST /events/export requests.
 func (h *EventHandler) ExportEvents(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		response.MethodNotAllowed(w)
-		return
-	}
-
 	var req dto.ExportEventsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Error("failed to decode export request", "error", err)
@@ -103,11 +93,6 @@ func (h *EventHandler) ExportEvents(w http.ResponseWriter, r *http.Request) {
 
 // IngestEvent handles POST /events/ingest requests for single event ingestion.
 func (h *EventHandler) IngestEvent(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		response.MethodNotAllowed(w)
-		return
-	}
-
 	var req dto.EventIngestRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Error("failed to decode ingest request", "error", err)
@@ -133,11 +118,6 @@ func (h *EventHandler) IngestEvent(w http.ResponseWriter, r *http.Request) {
 
 // IngestEventsBatch handles POST /events/ingest/batch requests for batch event ingestion.
 func (h *EventHandler) IngestEventsBatch(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		response.MethodNotAllowed(w)
-		return
-	}
-
 	var req dto.BatchIngestRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.logger.Error("failed to decode batch ingest request", "error", err)

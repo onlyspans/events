@@ -1,0 +1,34 @@
+[
+  {
+    "timestamp": "2026-02-07T12:00:00Z",
+    "user": "john.doe@example.com",
+    "category": "document",
+    "action": "created",
+    "document_name": "Project Proposal.docx",
+    "project": "alpha-project",
+    "environment": "production",
+    "tenant": "acme-corp",
+    "correlation_id": "corr-123",
+    "trace_id": "trace-456",
+    "ip_address": "192.168.1.100",
+    "user_agent": "Mozilla/5.0",
+    "changes": {
+      "title": "New Project Proposal",
+      "status": "draft"
+    },
+    "additional_info": {
+      "file_size": 1024000,
+      "format": "docx"
+    }
+  },
+  {
+    "timestamp": "2026-02-07T13:00:00Z",
+    "user": "jane.smith@example.com",
+    "category": "document",
+    "action": "updated",
+    "document_name": "Budget Report.xlsx",
+    "project": "beta-project",
+    "environment": "staging",
+    "tenant": "acme-corp"
+  }
+]

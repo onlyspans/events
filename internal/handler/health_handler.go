@@ -6,6 +6,7 @@ import (
 
 	"github.com/onlyspans/events/internal/http/response"
 	"github.com/onlyspans/events/internal/ports"
+	"github.com/onlyspans/events/pkg/version"
 )
 
 // HealthHandler handles health check requests.
@@ -29,11 +30,6 @@ type healthStatus struct {
 
 // Readiness handles GET /readyz requests.
 func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		response.MethodNotAllowed(w)
-		return
-	}
-
 	if err := h.healthChecker.Ping(r.Context()); err != nil {
 		h.logger.Error("database health check failed", "error", err)
 		response.JSON(w, http.StatusServiceUnavailable, healthStatus{
@@ -51,11 +47,10 @@ func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 }
 
 // Liveness handles GET /healthz requests.
-func (h *HealthHandler) Liveness(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		response.MethodNotAllowed(w)
-		return
-	}
-
+func (h *HealthHandler) Liveness(w http.ResponseWriter, _ *http.Request) {
 	response.OK(w, healthStatus{Status: "UP"})
+}
+
+func (h *HealthHandler) Version(w http.ResponseWriter, _ *http.Request) {
+	response.JSON(w, http.StatusOK, version.Get())
 }
