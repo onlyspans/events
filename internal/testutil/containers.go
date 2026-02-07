@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -105,13 +106,16 @@ func SetupPostgres(t *testing.T) *PostgresContainer {
 }
 
 // SetupPostgresWithMigrations creates a PostgreSQL testcontainer and runs migrations.
-func SetupPostgresWithMigrations(t *testing.T) *PostgresContainer {
+func SetupPostgresWithMigrations(t *testing.T, migrationsPath string) *PostgresContainer {
 	t.Helper()
 
 	pc := SetupPostgres(t)
 
 	// Run migrations
-	if err := migrations.Run(pc.DSN); err != nil {
+	if migrationsPath == "" {
+		migrationsPath = filepath.Join("..", "..", "migrations")
+	}
+	if err := migrations.Run(pc.DSN, migrationsPath); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
 

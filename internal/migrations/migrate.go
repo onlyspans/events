@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -12,10 +13,14 @@ import (
 
 // Run executes database migrations from the migrations directory.
 // It uses golang-migrate's standard approach with file-based migrations.
-func Run(databaseURL string) error {
+func Run(databaseURL, migrationsPath string) error {
 	slog.Info("starting database migrations")
 
-	m, err := migrate.New("file://migrations", databaseURL)
+	if migrationsPath == "" {
+		return errors.New("migrations path is required")
+	}
+
+	m, err := migrate.New("file://"+filepath.ToSlash(migrationsPath), databaseURL)
 	if err != nil {
 		return fmt.Errorf("create migrate instance: %w", err)
 	}

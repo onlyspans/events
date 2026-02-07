@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -49,7 +50,8 @@ func setupTestDB(t *testing.T) (*pgxpool.Pool, func()) {
 	}
 
 	// Run migrations from migrations directory
-	if err := migrations.Run(connStr); err != nil {
+	migrationsPath := filepath.Join("..", "..", "migrations")
+	if err := migrations.Run(connStr, migrationsPath); err != nil {
 		t.Fatalf("failed to run migrations: %v", err)
 	}
 
