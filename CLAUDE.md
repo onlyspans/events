@@ -225,7 +225,7 @@ The project uses a two-tier testing approach:
 ### Integration Tests (`internal/repository/*_integration_test.go`)
 - Use **testcontainers-go** to spin up real PostgreSQL containers
 - Test database queries, indexes, and JSONB operations
-- Migrations loaded via `migrations` package from `migrations/` directory
+- Migrations loaded via `internal/migrations` package from `migrations/` directory
 - Containers are automatically created and destroyed per test
 - Requires Docker daemon running locally
 

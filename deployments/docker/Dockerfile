@@ -12,6 +12,7 @@ RUN go mod download
 # Copy source code
 COPY cmd/ cmd/
 COPY internal/ internal/
+COPY migrations/ migrations/
 
 # Build unified binary
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o events ./cmd/server
@@ -22,6 +23,9 @@ WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /workspace/events .
+
+# Copy migrations directory
+COPY --from=builder /workspace/migrations ./migrations
 
 # Run as non-root user
 USER 65532:65532
