@@ -32,7 +32,6 @@ func main() {
 	}
 
 	logger.Info("feature flags",
-		"kafka_enabled", cfg.Features.KafkaEnabled,
 		"auto_migrate", cfg.Features.AutoMigrate,
 	)
 

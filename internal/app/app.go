@@ -9,7 +9,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/onlyspans/events/internal/config"
-	"github.com/onlyspans/events/internal/consumer"
 	"github.com/onlyspans/events/internal/handler"
 	"github.com/onlyspans/events/internal/http/middleware"
 	"github.com/onlyspans/events/internal/repository"
@@ -22,7 +21,6 @@ type Application struct {
 	config           *config.Config
 	pool             *pgxpool.Pool
 	httpServer       *http.Server
-	kafkaConsumer    *consumer.KafkaConsumer
 	retentionService *service.RetentionService
 	logger           *slog.Logger
 }
@@ -55,16 +53,6 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 		return nil, err
 	}
 	app.retentionService = retentionService
-
-	if cfg.Features.KafkaEnabled {
-		kafkaConsumer, err := consumer.NewKafkaConsumer(&cfg.Kafka, eventService, logger)
-		if err != nil {
-			retentionService.Stop()
-			pool.Close()
-			return nil, err
-		}
-		app.kafkaConsumer = kafkaConsumer
-	}
 
 	eventHandler := handler.NewEventHandler(eventService, logger)
 	settingsHandler := handler.NewSettingsHandler(settingsService, logger)
@@ -119,23 +107,6 @@ func (app *Application) Run(ctx context.Context) error {
 		return nil
 	})
 
-	if app.kafkaConsumer != nil {
-		g.Go(func() error {
-			app.logger.Info("starting Kafka consumer",
-				"brokers", app.config.Kafka.Brokers,
-				"topic", app.config.Kafka.Topic,
-				"group_id", app.config.Kafka.GroupID,
-			)
-			if err := app.kafkaConsumer.Start(globalCtx); err != nil {
-				app.logger.Error("kafka consumer error", "error", err)
-				return err
-			}
-			return nil
-		})
-	} else {
-		app.logger.Info("Kafka consumer disabled")
-	}
-
 	<-globalCtx.Done()
 
 	return g.Wait()
@@ -147,10 +118,6 @@ func (app *Application) Shutdown(ctx context.Context) error {
 	if err := app.httpServer.Shutdown(ctx); err != nil {
 		app.logger.Error("HTTP server forced to shutdown", "error", err)
 		return err
-	}
-
-	if app.kafkaConsumer != nil {
-		_ = app.kafkaConsumer.Close()
 	}
 
 	if app.retentionService != nil {

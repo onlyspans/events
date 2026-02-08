@@ -187,9 +187,6 @@ func TestLoad_MinimalConfiguration(t *testing.T) {
 	if cfg.Database.DSN != testDSN {
 		t.Errorf("expected POSTGRES_DSN=%s, got %s", testDSN, cfg.Database.DSN)
 	}
-	if cfg.Kafka.Brokers != "localhost:9092" {
-		t.Errorf("expected default KAFKA_BROKERS=localhost:9092, got %s", cfg.Kafka.Brokers)
-	}
 	if cfg.EventLog.RetentionPeriodDays != 90 {
 		t.Errorf("expected default RETENTION_PERIOD_DAYS=90, got %d", cfg.EventLog.RetentionPeriodDays)
 	}
@@ -240,95 +237,6 @@ func TestLoad_WithPostgresDSN(t *testing.T) {
 	}
 }
 
-func TestLoad_WithKafkaBrokers(t *testing.T) {
-	// Clear all environment variables
-	envVars := []string{
-		"SERVER_PORT",
-		"POSTGRES_DSN",
-		"KAFKA_ENABLED", "KAFKA_BROKERS", "KAFKA_TOPIC", "KAFKA_GROUP_ID",
-		"RETENTION_PERIOD_DAYS", "MAX_EXPORT_SIZE", "RETENTION_CRON",
-		"AUTO_MIGRATE",
-	}
-	for _, v := range envVars {
-		os.Unsetenv(v)
-	}
-	defer func() {
-		for _, v := range envVars {
-			os.Unsetenv(v)
-		}
-	}()
-
-	// Set required field and Kafka brokers
-	os.Setenv("POSTGRES_DSN", "postgres://test")
-	testBrokers := "broker1:9092,broker2:9093,broker3:9094"
-	os.Setenv("KAFKA_BROKERS", testBrokers)
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() failed: %v", err)
-	}
-
-	// Verify Brokers field is set
-	if cfg.Kafka.Brokers != testBrokers {
-		t.Errorf("expected KAFKA_BROKERS=%q, got %q", testBrokers, cfg.Kafka.Brokers)
-	}
-
-	// Verify GetBrokers() returns parsed brokers
-	brokers := cfg.Kafka.GetBrokers()
-	expectedBrokers := []string{"broker1:9092", "broker2:9093", "broker3:9094"}
-
-	if len(brokers) != len(expectedBrokers) {
-		t.Errorf("expected %d brokers, got %d", len(expectedBrokers), len(brokers))
-		return
-	}
-
-	for i, broker := range brokers {
-		if broker != expectedBrokers[i] {
-			t.Errorf("broker[%d] = %q; want %q", i, broker, expectedBrokers[i])
-		}
-	}
-}
-
-func TestKafkaConfig_GetBrokers(t *testing.T) {
-	tests := []struct {
-		name     string
-		brokers  string
-		expected []string
-	}{
-		{
-			name:     "single broker",
-			brokers:  "localhost:9092",
-			expected: []string{"localhost:9092"},
-		},
-		{
-			name:     "multiple brokers",
-			brokers:  "localhost:9092,localhost:9093,localhost:9094",
-			expected: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := KafkaConfig{
-				Brokers: tt.brokers,
-			}
-
-			result := cfg.GetBrokers()
-
-			if len(result) != len(tt.expected) {
-				t.Errorf("GetBrokers() returned %d brokers; want %d", len(result), len(tt.expected))
-				return
-			}
-
-			for i, broker := range result {
-				if broker != tt.expected[i] {
-					t.Errorf("GetBrokers()[%d] = %q; want %q", i, broker, tt.expected[i])
-				}
-			}
-		})
-	}
-}
-
 // validConfig returns a Config with valid values for testing.
 func validConfig() *Config {
 	return &Config{
@@ -339,11 +247,6 @@ func validConfig() *Config {
 			MaxConnLifetime:   5 * time.Minute,
 			MaxConnIdleTime:   30 * time.Minute,
 			HealthCheckPeriod: 60 * time.Second,
-		},
-		Kafka: KafkaConfig{
-			Brokers: "localhost:9092",
-			Topic:   "events",
-			GroupID: "events-group",
 		},
 		EventLog: EventLogConfig{
 			RetentionPeriodDays: 90,

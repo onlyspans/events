@@ -37,8 +37,7 @@ func NewAppBuilder(t *testing.T) *AppBuilder {
 	pg := SetupPostgres(t)
 	cfg := &config.Config{
 		Features: config.FeatureFlags{
-			KafkaEnabled: false,
-			AutoMigrate:  true,
+			AutoMigrate: true,
 		},
 		Database: config.DatabaseConfig{
 			DSN:               pg.DSN,
