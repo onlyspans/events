@@ -14,26 +14,8 @@ import (
 	"github.com/onlyspans/events/internal/http/middleware"
 	"github.com/onlyspans/events/internal/repository"
 	"github.com/onlyspans/events/internal/service"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/errgroup"
-)
-
-var (
-	dbPoolConnsGauge = promauto.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "db_pool_connections",
-			Help: "Current number of database connections",
-		},
-		[]string{"state"},
-	)
-	dbPoolMaxConnsGauge = promauto.NewGauge(
-		prometheus.GaugeOpts{
-			Name: "db_pool_max_connections",
-			Help: "Maximum number of database connections",
-		},
-	)
 )
 
 type Application struct {
