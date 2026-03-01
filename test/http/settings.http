@@ -1,0 +1,13 @@
+@baseUrl = http://localhost:8080
+
+### Get settings
+GET {{baseUrl}}/settings
+
+### Update settings
+PUT {{baseUrl}}/settings
+Content-Type: application/json
+
+{
+  "retentionPeriodDays": 180,
+  "maxExportSize": 50000
+}

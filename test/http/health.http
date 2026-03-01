@@ -1,0 +1,13 @@
+@baseUrl = http://localhost:8080
+
+### Liveness probe
+GET {{baseUrl}}/healthz
+
+### Readiness probe (checks DB)
+GET {{baseUrl}}/readyz
+
+### Version info
+GET {{baseUrl}}/version
+
+### Prometheus metrics
+GET {{baseUrl}}/metrics
