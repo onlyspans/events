@@ -7,6 +7,8 @@ import (
 	eventsv1 "github.com/onlyspans/events/gen/go/events/v1"
 	"github.com/onlyspans/events/internal/dto"
 	"github.com/onlyspans/events/internal/ports"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type SettingsServer struct {
@@ -30,6 +32,9 @@ func (s *SettingsServer) GetSettings(ctx context.Context, _ *eventsv1.GetSetting
 }
 
 func (s *SettingsServer) UpdateSettings(ctx context.Context, req *eventsv1.UpdateSettingsRequest) (*eventsv1.UpdateSettingsResponse, error) {
+	if req.Settings == nil {
+		return nil, status.Error(codes.InvalidArgument, "settings must be provided")
+	}
 	updated, err := s.settingsService.UpdateSettings(ctx, &dto.SettingsDTO{
 		RetentionPeriodDays: int(req.Settings.RetentionPeriodDays),
 		MaxExportSize:       int(req.Settings.MaxExportSize),
