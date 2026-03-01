@@ -1,0 +1,18 @@
+syntax = "proto3";
+package events.v1;
+option go_package = "github.com/onlyspans/events/gen/go/events/v1;eventsv1";
+
+message Settings {
+  int32 retention_period_days = 1;
+  int32 max_export_size       = 2;
+}
+
+message GetSettingsRequest {}
+message GetSettingsResponse   { Settings settings = 1; }
+message UpdateSettingsRequest { Settings settings = 1; }
+message UpdateSettingsResponse { Settings settings = 1; }
+
+service SettingsService {
+  rpc GetSettings(GetSettingsRequest)       returns (GetSettingsResponse);
+  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
+}

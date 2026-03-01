@@ -8,6 +8,7 @@ A microservice that manages domain events for dev-platform.
 - PostgreSQL 17 with JSONB support
 - [golang-migrate](https://github.com/golang-migrate/migrate) (embedded migrations)
 - Prometheus metrics
+- gRPC (protobuf, [buf](https://buf.build/))
 
 ## Quick Start
 
@@ -24,6 +25,12 @@ curl http://localhost:8080/healthz
 ```
 
 ## Local Development
+
+**First-time setup** (installs tools, downloads deps, generates proto code):
+
+```bash
+make init
+```
 
 **Run without Docker (requires PostgreSQL running locally):**
 
@@ -58,7 +65,17 @@ Config is loaded from `configs/.env`, then `configs/.env.local` (overrides). See
 | `RETENTION_PERIOD_DAYS` | `90` | Days to keep events |
 | `RETENTION_CRON` | `0 2 * * *` | Cron schedule for retention job |
 | `MAX_EXPORT_SIZE` | `10000` | Max events per CSV export |
+| `GRPC_PORT` | `9090` | gRPC server port |
 
 ## API
 
-See [`test/http/`](test/http/) for ready-to-use HTTP request examples.
+**HTTP** — see [`test/http/`](test/http/) for ready-to-use request examples.
+
+**gRPC** (port `9090`) — services: `events.v1.EventService`, `events.v1.SettingsService`. Proto sources: [`api/proto/`](api/proto/).
+
+```bash
+# List available services (requires grpcurl)
+grpcurl -plaintext localhost:9090 list
+```
+
+> The generated Go code lives in `gen/` (gitignored). Run `make proto-gen` after changing `.proto` files.
