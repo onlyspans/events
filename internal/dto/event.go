@@ -8,65 +8,45 @@ import (
 	"github.com/onlyspans/events/internal/domain"
 )
 
-// EventDTO represents the data transfer object for events.
 type EventDTO struct {
-	ID            string           `json:"id,omitempty"`
-	Timestamp     time.Time        `json:"timestamp"`
-	User          string           `json:"user"`
-	Category      string           `json:"category"`
-	Action        string           `json:"action"`
-	DocumentName  string           `json:"documentName,omitempty"`
-	Project       string           `json:"project,omitempty"`
-	Environment   string           `json:"environment,omitempty"`
-	Tenant        string           `json:"tenant,omitempty"`
-	CorrelationID string           `json:"correlationId,omitempty"`
-	TraceID       string           `json:"traceId,omitempty"`
-	Details       *EventDetailsDTO `json:"details,omitempty"`
+	ID         string      `json:"id,omitempty"`
+	Timestamp  time.Time   `json:"timestamp"`
+	EntityID   string      `json:"entityId"`
+	EntityName string      `json:"entityName,omitempty"`
+	Action     string      `json:"action"`
+	UserID     string      `json:"userId,omitempty"`
+	IPAddress  string      `json:"ipAddress,omitempty"`
+	UserAgent  string      `json:"userAgent,omitempty"`
+	Tenant     string      `json:"tenant,omitempty"`
+	Changes    []ChangeDTO `json:"changes,omitempty"`
 }
 
-// EventDetailsDTO contains additional information about the event.
-type EventDetailsDTO struct {
-	Changes        []ChangeDTO `json:"changes,omitempty"`
-	IPAddress      string      `json:"ipAddress,omitempty"`
-	UserAgent      string      `json:"userAgent,omitempty"`
-	AdditionalInfo string      `json:"additionalInfo,omitempty"`
-}
-
-// ChangeDTO represents a field change.
 type ChangeDTO struct {
 	Field    string `json:"field,omitempty"`
 	OldValue string `json:"oldValue,omitempty"`
 	NewValue string `json:"newValue,omitempty"`
 }
 
-// EventFilterRequest contains common filter fields for event queries.
 type EventFilterRequest struct {
-	User          string     `json:"user,omitempty"`
-	Category      string     `json:"category,omitempty"`
-	Action        string     `json:"action,omitempty"`
-	Document      string     `json:"document,omitempty"`
-	Project       string     `json:"project,omitempty"`
-	Environment   string     `json:"environment,omitempty"`
-	Tenant        string     `json:"tenant,omitempty"`
-	CorrelationID string     `json:"correlationId,omitempty"`
-	TraceID       string     `json:"traceId,omitempty"`
-	StartDate     *time.Time `json:"startDate,omitempty"`
-	EndDate       *time.Time `json:"endDate,omitempty"`
-	SortBy        string     `json:"sortBy,omitempty"`
-	SortOrder     string     `json:"sortOrder,omitempty"`
+	EntityID   string     `json:"entityId,omitempty"`
+	EntityName string     `json:"entityName,omitempty"`
+	Action     string     `json:"action,omitempty"`
+	UserID     string     `json:"userId,omitempty"`
+	Tenant     string     `json:"tenant,omitempty"`
+	StartDate  *time.Time `json:"startDate,omitempty"`
+	EndDate    *time.Time `json:"endDate,omitempty"`
+	SortBy     string     `json:"sortBy,omitempty"`
+	SortOrder  string     `json:"sortOrder,omitempty"`
 }
 
-// SearchEventsRequest represents the search request parameters.
 type SearchEventsRequest struct {
 	EventFilterRequest
 	Page int `json:"page,omitempty"`
 	Size int `json:"size,omitempty"`
 }
 
-// ExportEventsRequest represents the export request parameters.
 type ExportEventsRequest = EventFilterRequest
 
-// QueryResult represents the search results with pagination.
 type QueryResult struct {
 	Events     []EventDTO `json:"events"`
 	Total      int64      `json:"total"`
@@ -75,28 +55,21 @@ type QueryResult struct {
 	TotalPages int        `json:"totalPages"`
 }
 
-// EventIngestRequest represents a request to ingest a single event via HTTP.
 type EventIngestRequest struct {
-	Timestamp     time.Time              `json:"timestamp"`
-	User          string                 `json:"user"`
-	Category      string                 `json:"category"`
-	Action        string                 `json:"action"`
-	DocumentName  string                 `json:"document_name,omitempty"`
-	Project       string                 `json:"project,omitempty"`
-	Environment   string                 `json:"environment,omitempty"`
-	Tenant        string                 `json:"tenant,omitempty"`
-	Details       map[string]interface{} `json:"details,omitempty"`
-	CorrelationID string                 `json:"correlation_id,omitempty"`
-	TraceID       string                 `json:"trace_id,omitempty"`
+	Timestamp  time.Time   `json:"timestamp"`
+	EntityID   string      `json:"entity_id"`
+	EntityName string      `json:"entity_name,omitempty"`
+	Action     string      `json:"action"`
+	UserID     string      `json:"user_id,omitempty"`
+	IPAddress  string      `json:"ip_address,omitempty"`
+	UserAgent  string      `json:"user_agent,omitempty"`
+	Tenant     string      `json:"tenant,omitempty"`
+	Changes    []ChangeDTO `json:"changes,omitempty"`
 }
 
-// Validate checks that all required fields are present and non-empty.
 func (e *EventIngestRequest) Validate() error {
-	if e.User == "" {
-		return fmt.Errorf("missing required field: user")
-	}
-	if e.Category == "" {
-		return fmt.Errorf("missing required field: category")
+	if e.EntityID == "" {
+		return fmt.Errorf("missing required field: entity_id")
 	}
 	if e.Action == "" {
 		return fmt.Errorf("missing required field: action")
@@ -104,78 +77,52 @@ func (e *EventIngestRequest) Validate() error {
 	return nil
 }
 
-// ToEvent converts the EventIngestRequest to a domain.Event.
 func (e *EventIngestRequest) ToEvent() *domain.Event {
-	var details *domain.EventDetails
-	if len(e.Details) > 0 {
-		// Convert map[string]interface{} to EventDetails
-		// For now, we store the raw details as AdditionalInfo
-		// The service layer can further process if needed
-		details = &domain.EventDetails{}
+	entityID, err := uuid.Parse(e.EntityID)
+	if err != nil {
+		entityID = uuid.Nil
+	}
 
-		// Try to extract known fields
-		if changes, ok := e.Details["changes"].([]interface{}); ok {
-			for _, change := range changes {
-				if changeMap, ok := change.(map[string]interface{}); ok {
-					c := domain.Change{}
-					if field, ok := changeMap["field"].(string); ok {
-						c.Field = field
-					}
-					if oldValue, ok := changeMap["oldValue"].(string); ok {
-						c.OldValue = oldValue
-					}
-					if newValue, ok := changeMap["newValue"].(string); ok {
-						c.NewValue = newValue
-					}
-					details.Changes = append(details.Changes, c)
-				}
+	var changes []domain.Change
+	if len(e.Changes) > 0 {
+		changes = make([]domain.Change, len(e.Changes))
+		for i, c := range e.Changes {
+			changes[i] = domain.Change{
+				Field:    c.Field,
+				OldValue: c.OldValue,
+				NewValue: c.NewValue,
 			}
-		}
-		if ipAddress, ok := e.Details["ipAddress"].(string); ok {
-			details.IPAddress = ipAddress
-		}
-		if userAgent, ok := e.Details["userAgent"].(string); ok {
-			details.UserAgent = userAgent
-		}
-		if additionalInfo, ok := e.Details["additionalInfo"].(string); ok {
-			details.AdditionalInfo = additionalInfo
 		}
 	}
 
 	return &domain.Event{
-		Timestamp:     e.Timestamp,
-		User:          e.User,
-		Category:      e.Category,
-		Action:        e.Action,
-		DocumentName:  e.DocumentName,
-		Project:       e.Project,
-		Environment:   e.Environment,
-		Tenant:        e.Tenant,
-		Details:       details,
-		CorrelationID: e.CorrelationID,
-		TraceID:       e.TraceID,
+		Timestamp:  e.Timestamp,
+		EntityID:   entityID,
+		EntityName: e.EntityName,
+		Action:     e.Action,
+		UserID:     e.UserID,
+		IPAddress:  e.IPAddress,
+		UserAgent:  e.UserAgent,
+		Tenant:     e.Tenant,
+		Changes:    changes,
 	}
 }
 
-// BatchIngestRequest represents a request to ingest multiple events via HTTP.
 type BatchIngestRequest struct {
 	Events []EventIngestRequest `json:"events"`
 }
 
-// BatchIngestResponse represents the response for a batch ingestion request.
 type BatchIngestResponse struct {
 	SuccessCount int          `json:"success_count"`
 	FailureCount int          `json:"failure_count"`
 	Errors       []BatchError `json:"errors,omitempty"`
 }
 
-// BatchError represents an error that occurred during batch ingestion.
 type BatchError struct {
 	Index int    `json:"index"`
 	Error string `json:"error"`
 }
 
-// SingleIngestResponse represents the response for single event ingestion.
 type SingleIngestResponse struct {
 	ID uuid.UUID `json:"id"`
 }

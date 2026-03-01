@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onlyspans/events/internal/domain"
+	"github.com/google/uuid"
 )
 
 func TestEventIngestRequest_Validate(t *testing.T) {
@@ -17,8 +17,7 @@ func TestEventIngestRequest_Validate(t *testing.T) {
 		{
 			name: "valid request with all required fields",
 			request: EventIngestRequest{
-				User:     "test_user",
-				Category: "test_category",
+				EntityID: uuid.New().String(),
 				Action:   "test_action",
 			},
 			wantErr: false,
@@ -26,63 +25,41 @@ func TestEventIngestRequest_Validate(t *testing.T) {
 		{
 			name: "valid request with all fields",
 			request: EventIngestRequest{
-				Timestamp:     time.Now(),
-				User:          "test_user",
-				Category:      "test_category",
-				Action:        "test_action",
-				DocumentName:  "test_doc",
-				Project:       "test_project",
-				Environment:   "test_env",
-				Tenant:        "test_tenant",
-				Details:       map[string]interface{}{"key": "value"},
-				CorrelationID: "corr-123",
-				TraceID:       "trace-456",
+				Timestamp:  time.Now(),
+				EntityID:   uuid.New().String(),
+				EntityName: "test_entity",
+				Action:     "test_action",
+				UserID:     "test_user",
+				IPAddress:  "192.168.1.1",
+				UserAgent:  "Mozilla/5.0",
+				Tenant:     "test_tenant",
+				Changes: []ChangeDTO{
+					{Field: "status", OldValue: "open", NewValue: "closed"},
+				},
 			},
 			wantErr: false,
 		},
 		{
-			name: "missing user",
+			name: "missing entity_id",
 			request: EventIngestRequest{
-				Category: "test_category",
-				Action:   "test_action",
-			},
-			wantErr: true,
-			errMsg:  "missing required field: user",
-		},
-		{
-			name: "empty user",
-			request: EventIngestRequest{
-				User:     "",
-				Category: "test_category",
-				Action:   "test_action",
-			},
-			wantErr: true,
-			errMsg:  "missing required field: user",
-		},
-		{
-			name: "missing category",
-			request: EventIngestRequest{
-				User:   "test_user",
 				Action: "test_action",
 			},
 			wantErr: true,
-			errMsg:  "missing required field: category",
+			errMsg:  "missing required field: entity_id",
 		},
 		{
-			name: "empty category",
+			name: "empty entity_id",
 			request: EventIngestRequest{
-				User:     "test_user",
-				Category: "",
+				EntityID: "",
 				Action:   "test_action",
 			},
 			wantErr: true,
-			errMsg:  "missing required field: category",
+			errMsg:  "missing required field: entity_id",
 		},
 		{
 			name: "missing action",
 			request: EventIngestRequest{
-				User:     "test_user",
-				Category: "test_category",
+				EntityID: uuid.New().String(),
 			},
 			wantErr: true,
 			errMsg:  "missing required field: action",
@@ -90,8 +67,7 @@ func TestEventIngestRequest_Validate(t *testing.T) {
 		{
 			name: "empty action",
 			request: EventIngestRequest{
-				User:     "test_user",
-				Category: "test_category",
+				EntityID: uuid.New().String(),
 				Action:   "",
 			},
 			wantErr: true,
@@ -100,10 +76,10 @@ func TestEventIngestRequest_Validate(t *testing.T) {
 		{
 			name: "all required fields missing",
 			request: EventIngestRequest{
-				DocumentName: "test_doc",
+				EntityName: "test_entity",
 			},
 			wantErr: true,
-			errMsg:  "missing required field: user",
+			errMsg:  "missing required field: entity_id",
 		},
 	}
 
@@ -127,166 +103,113 @@ func TestEventIngestRequest_Validate(t *testing.T) {
 
 func TestEventIngestRequest_ToEvent(t *testing.T) {
 	timestamp := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	entityID := uuid.New()
 
 	tests := []struct {
 		name     string
 		request  EventIngestRequest
-		validate func(*testing.T, *domain.Event)
+		validate func(*testing.T, EventIngestRequest)
 	}{
 		{
 			name: "converts required fields only",
 			request: EventIngestRequest{
-				User:     "test_user",
-				Category: "test_category",
+				EntityID: entityID.String(),
 				Action:   "test_action",
 			},
-			validate: func(t *testing.T, event *domain.Event) {
-				if event.User != "test_user" {
-					t.Errorf("User = %v, want %v", event.User, "test_user")
-				}
-				if event.Category != "test_category" {
-					t.Errorf("Category = %v, want %v", event.Category, "test_category")
+			validate: func(t *testing.T, req EventIngestRequest) {
+				event := req.ToEvent()
+				if event.EntityID != entityID {
+					t.Errorf("EntityID = %v, want %v", event.EntityID, entityID)
 				}
 				if event.Action != "test_action" {
 					t.Errorf("Action = %v, want %v", event.Action, "test_action")
 				}
-				if event.Details != nil {
-					t.Errorf("Details = %v, want nil", event.Details)
+				if len(event.Changes) != 0 {
+					t.Errorf("Changes = %v, want empty", event.Changes)
 				}
 			},
 		},
 		{
 			name: "converts all fields",
 			request: EventIngestRequest{
-				Timestamp:     timestamp,
-				User:          "test_user",
-				Category:      "test_category",
-				Action:        "test_action",
-				DocumentName:  "test_doc",
-				Project:       "test_project",
-				Environment:   "production",
-				Tenant:        "tenant-1",
-				CorrelationID: "corr-123",
-				TraceID:       "trace-456",
+				Timestamp:  timestamp,
+				EntityID:   entityID.String(),
+				EntityName: "test_entity",
+				Action:     "test_action",
+				UserID:     "user-123",
+				IPAddress:  "192.168.1.1",
+				UserAgent:  "Mozilla/5.0",
+				Tenant:     "tenant-1",
 			},
-			validate: func(t *testing.T, event *domain.Event) {
+			validate: func(t *testing.T, req EventIngestRequest) {
+				event := req.ToEvent()
 				if event.Timestamp != timestamp {
 					t.Errorf("Timestamp = %v, want %v", event.Timestamp, timestamp)
 				}
-				if event.User != "test_user" {
-					t.Errorf("User = %v, want %v", event.User, "test_user")
+				if event.EntityID != entityID {
+					t.Errorf("EntityID = %v, want %v", event.EntityID, entityID)
 				}
-				if event.DocumentName != "test_doc" {
-					t.Errorf("DocumentName = %v, want %v", event.DocumentName, "test_doc")
+				if event.EntityName != "test_entity" {
+					t.Errorf("EntityName = %v, want %v", event.EntityName, "test_entity")
 				}
-				if event.Project != "test_project" {
-					t.Errorf("Project = %v, want %v", event.Project, "test_project")
+				if event.UserID != "user-123" {
+					t.Errorf("UserID = %v, want %v", event.UserID, "user-123")
 				}
-				if event.Environment != "production" {
-					t.Errorf("Environment = %v, want %v", event.Environment, "production")
+				if event.IPAddress != "192.168.1.1" {
+					t.Errorf("IPAddress = %v, want %v", event.IPAddress, "192.168.1.1")
+				}
+				if event.UserAgent != "Mozilla/5.0" {
+					t.Errorf("UserAgent = %v, want %v", event.UserAgent, "Mozilla/5.0")
 				}
 				if event.Tenant != "tenant-1" {
 					t.Errorf("Tenant = %v, want %v", event.Tenant, "tenant-1")
 				}
-				if event.CorrelationID != "corr-123" {
-					t.Errorf("CorrelationID = %v, want %v", event.CorrelationID, "corr-123")
-				}
-				if event.TraceID != "trace-456" {
-					t.Errorf("TraceID = %v, want %v", event.TraceID, "trace-456")
-				}
 			},
 		},
 		{
-			name: "converts details with known fields",
+			name: "converts changes",
 			request: EventIngestRequest{
-				User:     "test_user",
-				Category: "test_category",
+				EntityID: entityID.String(),
 				Action:   "test_action",
-				Details: map[string]interface{}{
-					"ipAddress":      "192.168.1.1",
-					"userAgent":      "Mozilla/5.0",
-					"additionalInfo": "extra data",
-				},
-			},
-			validate: func(t *testing.T, event *domain.Event) {
-				if event.Details == nil {
-					t.Fatal("Details should not be nil")
-				}
-				if event.Details.IPAddress != "192.168.1.1" {
-					t.Errorf("Details.IPAddress = %v, want %v", event.Details.IPAddress, "192.168.1.1")
-				}
-				if event.Details.UserAgent != "Mozilla/5.0" {
-					t.Errorf("Details.UserAgent = %v, want %v", event.Details.UserAgent, "Mozilla/5.0")
-				}
-				if event.Details.AdditionalInfo != "extra data" {
-					t.Errorf("Details.AdditionalInfo = %v, want %v", event.Details.AdditionalInfo, "extra data")
-				}
-			},
-		},
-		{
-			name: "converts details with changes",
-			request: EventIngestRequest{
-				User:     "test_user",
-				Category: "test_category",
-				Action:   "test_action",
-				Details: map[string]interface{}{
-					"changes": []interface{}{
-						map[string]interface{}{
-							"field":    "status",
-							"oldValue": "open",
-							"newValue": "closed",
-						},
-						map[string]interface{}{
-							"field":    "priority",
-							"oldValue": "low",
-							"newValue": "high",
-						},
+				Changes: []ChangeDTO{
+					{
+						Field:    "status",
+						OldValue: "open",
+						NewValue: "closed",
+					},
+					{
+						Field:    "priority",
+						OldValue: "low",
+						NewValue: "high",
 					},
 				},
 			},
-			validate: func(t *testing.T, event *domain.Event) {
-				if event.Details == nil {
-					t.Fatal("Details should not be nil")
+			validate: func(t *testing.T, req EventIngestRequest) {
+				event := req.ToEvent()
+				if len(event.Changes) != 2 {
+					t.Fatalf("Changes length = %v, want %v", len(event.Changes), 2)
 				}
-				if len(event.Details.Changes) != 2 {
-					t.Fatalf("Details.Changes length = %v, want %v", len(event.Details.Changes), 2)
+				if event.Changes[0].Field != "status" {
+					t.Errorf("Changes[0].Field = %v, want %v", event.Changes[0].Field, "status")
 				}
-				if event.Details.Changes[0].Field != "status" {
-					t.Errorf("Changes[0].Field = %v, want %v", event.Details.Changes[0].Field, "status")
+				if event.Changes[0].OldValue != "open" {
+					t.Errorf("Changes[0].OldValue = %v, want %v", event.Changes[0].OldValue, "open")
 				}
-				if event.Details.Changes[0].OldValue != "open" {
-					t.Errorf("Changes[0].OldValue = %v, want %v", event.Details.Changes[0].OldValue, "open")
-				}
-				if event.Details.Changes[0].NewValue != "closed" {
-					t.Errorf("Changes[0].NewValue = %v, want %v", event.Details.Changes[0].NewValue, "closed")
+				if event.Changes[0].NewValue != "closed" {
+					t.Errorf("Changes[0].NewValue = %v, want %v", event.Changes[0].NewValue, "closed")
 				}
 			},
 		},
 		{
-			name: "handles empty details map",
+			name: "handles invalid entity_id",
 			request: EventIngestRequest{
-				User:     "test_user",
-				Category: "test_category",
+				EntityID: "invalid-uuid",
 				Action:   "test_action",
-				Details:  map[string]interface{}{},
 			},
-			validate: func(t *testing.T, event *domain.Event) {
-				if event.Details != nil {
-					t.Errorf("Details should be nil for empty map")
-				}
-			},
-		},
-		{
-			name: "handles nil details",
-			request: EventIngestRequest{
-				User:     "test_user",
-				Category: "test_category",
-				Action:   "test_action",
-				Details:  nil,
-			},
-			validate: func(t *testing.T, event *domain.Event) {
-				if event.Details != nil {
-					t.Errorf("Details should be nil")
+			validate: func(t *testing.T, req EventIngestRequest) {
+				event := req.ToEvent()
+				if event.EntityID != uuid.Nil {
+					t.Errorf("EntityID should be uuid.Nil for invalid UUID, got %v", event.EntityID)
 				}
 			},
 		},
@@ -294,11 +217,11 @@ func TestEventIngestRequest_ToEvent(t *testing.T) {
 			name: "handles zero timestamp",
 			request: EventIngestRequest{
 				Timestamp: time.Time{},
-				User:      "test_user",
-				Category:  "test_category",
+				EntityID:  entityID.String(),
 				Action:    "test_action",
 			},
-			validate: func(t *testing.T, event *domain.Event) {
+			validate: func(t *testing.T, req EventIngestRequest) {
+				event := req.ToEvent()
 				if !event.Timestamp.IsZero() {
 					t.Errorf("Timestamp should be zero, got %v", event.Timestamp)
 				}
@@ -308,11 +231,7 @@ func TestEventIngestRequest_ToEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			event := tt.request.ToEvent()
-			if event == nil {
-				t.Fatal("ToEvent() returned nil")
-			}
-			tt.validate(t, event)
+			tt.validate(t, tt.request)
 		})
 	}
 }
@@ -322,13 +241,11 @@ func TestBatchIngestRequest(t *testing.T) {
 		req := BatchIngestRequest{
 			Events: []EventIngestRequest{
 				{
-					User:     "user1",
-					Category: "cat1",
+					EntityID: uuid.New().String(),
 					Action:   "action1",
 				},
 				{
-					User:     "user2",
-					Category: "cat2",
+					EntityID: uuid.New().String(),
 					Action:   "action2",
 				},
 			},
@@ -441,46 +358,38 @@ func TestEventIngestRequest_JSONMarshaling(t *testing.T) {
 	t.Run("marshal and unmarshal with all fields", func(t *testing.T) {
 		timestamp := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 		original := EventIngestRequest{
-			Timestamp:     timestamp,
-			User:          "test_user",
-			Category:      "test_category",
-			Action:        "test_action",
-			DocumentName:  "test_doc",
-			Project:       "test_project",
-			Environment:   "production",
-			Tenant:        "tenant-1",
-			Details: map[string]interface{}{
-				"ipAddress": "192.168.1.1",
-				"userAgent": "Mozilla/5.0",
+			Timestamp:  timestamp,
+			EntityID:   uuid.New().String(),
+			EntityName: "test_entity",
+			Action:     "test_action",
+			UserID:     "test_user",
+			IPAddress:  "192.168.1.1",
+			UserAgent:  "Mozilla/5.0",
+			Tenant:     "tenant-1",
+			Changes: []ChangeDTO{
+				{Field: "status", OldValue: "open", NewValue: "closed"},
 			},
-			CorrelationID: "corr-123",
-			TraceID:       "trace-456",
 		}
 
-		// This would be handled by encoding/json in real HTTP handlers
-		// We're just verifying the struct tags are correct
-		if original.User != "test_user" {
-			t.Errorf("User = %v, want test_user", original.User)
+		if original.EntityID == "" {
+			t.Errorf("EntityID should not be empty")
 		}
 	})
 
 	t.Run("omitempty works for optional fields", func(t *testing.T) {
 		req := EventIngestRequest{
-			User:     "test_user",
-			Category: "test_category",
+			EntityID: uuid.New().String(),
 			Action:   "test_action",
 		}
 
-		// Verify required fields are present
-		if req.User == "" {
-			t.Error("User should not be empty")
+		if req.EntityID == "" {
+			t.Error("EntityID should not be empty")
 		}
-		// Optional fields can be empty
-		if req.DocumentName != "" {
-			t.Error("DocumentName should be empty")
+		if req.EntityName != "" {
+			t.Error("EntityName should be empty")
 		}
-		if req.Details != nil {
-			t.Error("Details should be nil")
+		if req.Changes != nil {
+			t.Error("Changes should be nil")
 		}
 	})
 }
@@ -490,13 +399,11 @@ func TestBatchIngestRequest_JSONMarshaling(t *testing.T) {
 		batch := BatchIngestRequest{
 			Events: []EventIngestRequest{
 				{
-					User:     "user1",
-					Category: "cat1",
+					EntityID: uuid.New().String(),
 					Action:   "action1",
 				},
 				{
-					User:     "user2",
-					Category: "cat2",
+					EntityID: uuid.New().String(),
 					Action:   "action2",
 				},
 			},
@@ -510,7 +417,7 @@ func TestBatchIngestRequest_JSONMarshaling(t *testing.T) {
 
 func TestSingleIngestResponse(t *testing.T) {
 	t.Run("response with uuid", func(t *testing.T) {
-		id := domain.Event{}.ID
+		id := uuid.New()
 		resp := SingleIngestResponse{
 			ID: id,
 		}
