@@ -1,0 +1,79 @@
+@baseUrl = http://localhost:8080
+
+### Ingest single event
+POST {{baseUrl}}/events/ingest
+Content-Type: application/json
+
+{
+  "timestamp": "2026-03-01T12:00:00Z",
+  "entity_id": "550e8400-e29b-41d4-a716-446655440000",
+  "entity_name": "Project Proposal.docx",
+  "action": "created",
+  "user_id": "john.doe@example.com",
+  "ip_address": "192.168.1.100",
+  "user_agent": "Mozilla/5.0",
+  "tenant": "acme-corp",
+  "changes": [
+    { "field": "status", "oldValue": "", "newValue": "draft" }
+  ]
+}
+
+### Ingest batch of events
+POST {{baseUrl}}/events/ingest/batch
+Content-Type: application/json
+
+{
+  "events": [
+    {
+      "timestamp": "2026-03-01T12:00:00Z",
+      "entity_id": "550e8400-e29b-41d4-a716-446655440001",
+      "entity_name": "Budget Report.xlsx",
+      "action": "updated",
+      "user_id": "jane.smith@example.com",
+      "tenant": "acme-corp"
+    },
+    {
+      "timestamp": "2026-03-01T13:00:00Z",
+      "entity_id": "550e8400-e29b-41d4-a716-446655440002",
+      "action": "deleted",
+      "user_id": "john.doe@example.com",
+      "tenant": "acme-corp"
+    }
+  ]
+}
+
+### Search events (all)
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{
+  "page": 1,
+  "size": 50
+}
+
+### Search events with filters
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{
+  "entityId": "550e8400-e29b-41d4-a716-446655440000",
+  "action": "created",
+  "userId": "john.doe@example.com",
+  "tenant": "acme-corp",
+  "startDate": "2026-01-01T00:00:00Z",
+  "endDate": "2026-12-31T23:59:59Z",
+  "sortBy": "timestamp",
+  "sortOrder": "desc",
+  "page": 1,
+  "size": 50
+}
+
+### Export events to CSV
+POST {{baseUrl}}/events/export
+Content-Type: application/json
+
+{
+  "tenant": "acme-corp",
+  "startDate": "2026-01-01T00:00:00Z",
+  "endDate": "2026-12-31T23:59:59Z"
+}
