@@ -92,7 +92,7 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 
 	app.httpServer = &http.Server{
 		Addr:         ":8080",
-		Handler:      pipeline(mux),
+		Handler:      mux,
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
