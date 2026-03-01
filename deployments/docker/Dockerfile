@@ -1,3 +1,9 @@
+FROM bufbuild/buf:1.54.0 AS proto-gen
+WORKDIR /workspace
+COPY api/ api/
+COPY buf.yaml buf.gen.yaml ./
+RUN buf generate
+
 FROM golang:1.25 AS builder
 ARG TARGETOS
 ARG TARGETARCH
@@ -11,7 +17,7 @@ COPY cmd/ cmd/
 COPY internal/ internal/
 COPY migrations/ migrations/
 COPY pkg/ pkg/
-COPY gen/ gen/
+COPY --from=proto-gen /workspace/gen/ gen/
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o events ./cmd/server
 
