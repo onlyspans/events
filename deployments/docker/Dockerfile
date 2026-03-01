@@ -11,6 +11,7 @@ COPY cmd/ cmd/
 COPY internal/ internal/
 COPY migrations/ migrations/
 COPY pkg/ pkg/
+COPY gen/ gen/
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o events ./cmd/server
 
@@ -22,5 +23,6 @@ COPY --from=builder /workspace/migrations ./migrations
 
 USER 65532:65532
 EXPOSE 8080
+EXPOSE 9090
 
 ENTRYPOINT ["/app/events"]

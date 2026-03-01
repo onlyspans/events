@@ -1,6 +1,6 @@
 .PHONY: help build run test test-unit test-integration test-coverage clean \
         docker-build compose-up compose-down compose-up-kafka lint fmt deps \
-        run-race install-tools version
+        run-race install-tools version proto-gen proto-lint init
 
 # Variables
 BINARY_NAME=events
@@ -14,6 +14,7 @@ LDFLAGS=-ldflags "-X github.com/onlyspans/events/pkg/version.Version=${VERSION} 
 
 help:
 	@echo "Available targets:"
+	@echo "  init               - Install tools, download deps, and generate proto code"
 	@echo "  build              - Build server binary with version info"
 	@echo "  run                - Run the server locally"
 	@echo "  run-race           - Run with race detector"
@@ -31,6 +32,8 @@ help:
 	@echo "  compose-up-kafka   - Start with Kafka enabled"
 	@echo "  install-tools      - Install development tools"
 	@echo "  version            - Display version information"
+	@echo "  proto-gen          - Generate Go code from proto files (requires buf)"
+	@echo "  proto-lint         - Lint proto files (requires buf)"
 
 # Build with version information
 build:
@@ -114,11 +117,25 @@ compose-up-kafka:
 	@echo "Starting with Kafka..."
 	docker compose -f deployments/compose/compose.yaml -f deployments/compose/compose.kafka.yaml up -d
 
+# One-time setup for new contributors
+init: install-tools deps proto-gen
+	@echo "Project initialized successfully"
+
+# Proto generation
+proto-gen:
+	@echo "Generating Go code from proto files..."
+	buf generate
+
+proto-lint:
+	@echo "Linting proto files..."
+	buf lint
+
 # Install development tools
 install-tools:
 	@echo "Installing development tools..."
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	go install golang.org/x/tools/cmd/goimports@latest
+	go install github.com/bufbuild/buf/cmd/buf@v1.54.0
 
 # Version information
 version:

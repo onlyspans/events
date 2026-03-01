@@ -1,0 +1,83 @@
+syntax = "proto3";
+package events.v1;
+option go_package = "github.com/onlyspans/events/gen/go/events/v1;eventsv1";
+
+import "google/protobuf/timestamp.proto";
+
+message Change {
+  string field     = 1;
+  string old_value = 2;
+  string new_value = 3;
+}
+
+message Event {
+  string                    id          = 1;
+  google.protobuf.Timestamp timestamp   = 2;
+  string                    entity_id   = 3;
+  string                    entity_name = 4;
+  string                    action      = 5;
+  string                    user_id     = 6;
+  string                    ip_address  = 7;
+  string                    user_agent  = 8;
+  string                    tenant      = 9;
+  repeated Change           changes     = 10;
+}
+
+message IngestEventRequest {
+  google.protobuf.Timestamp timestamp   = 1;
+  string                    entity_id   = 2;
+  string                    entity_name = 3;
+  string                    action      = 4;
+  string                    user_id     = 5;
+  string                    ip_address  = 6;
+  string                    user_agent  = 7;
+  string                    tenant      = 8;
+  repeated Change           changes     = 9;
+}
+
+message IngestEventResponse {
+  string id = 1;
+}
+
+message IngestEventBatchRequest {
+  repeated IngestEventRequest events = 1;
+}
+
+message BatchError {
+  int32  index   = 1;
+  string message = 2;
+}
+
+message IngestEventBatchResponse {
+  int32               success_count = 1;
+  int32               failure_count = 2;
+  repeated BatchError errors        = 3;
+}
+
+message SearchEventsRequest {
+  string                             entity_id   = 1;
+  string                             entity_name = 2;
+  string                             action      = 3;
+  string                             user_id     = 4;
+  string                             tenant      = 5;
+  optional google.protobuf.Timestamp start_date  = 6;
+  optional google.protobuf.Timestamp end_date    = 7;
+  string                             sort_by     = 8;
+  string                             sort_order  = 9;
+  int32                              page        = 10;
+  int32                              size        = 11;
+}
+
+message SearchEventsResponse {
+  repeated Event events      = 1;
+  int64          total       = 2;
+  int32          page        = 3;
+  int32          size        = 4;
+  int32          total_pages = 5;
+}
+
+service EventService {
+  rpc IngestEvent(IngestEventRequest)           returns (IngestEventResponse);
+  rpc IngestEventBatch(IngestEventBatchRequest) returns (IngestEventBatchResponse);
+  rpc SearchEvents(SearchEventsRequest)         returns (SearchEventsResponse);
+}

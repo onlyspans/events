@@ -3,24 +3,29 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/onlyspans/events/internal/config"
+	grpchandler "github.com/onlyspans/events/internal/grpc"
 	"github.com/onlyspans/events/internal/handler"
 	"github.com/onlyspans/events/internal/http/middleware"
 	"github.com/onlyspans/events/internal/repository"
 	"github.com/onlyspans/events/internal/service"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 )
 
 type Application struct {
 	config           *config.Config
 	pool             *pgxpool.Pool
 	httpServer       *http.Server
+	grpcServer       *grpc.Server
 	retentionService *service.RetentionService
 	logger           *slog.Logger
 }
@@ -53,6 +58,8 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 		return nil, err
 	}
 	app.retentionService = retentionService
+
+	app.grpcServer = grpchandler.NewServer(eventService, settingsService, logger)
 
 	eventHandler := handler.NewEventHandler(eventService, logger)
 	settingsHandler := handler.NewSettingsHandler(settingsService, logger)
@@ -107,6 +114,19 @@ func (app *Application) Run(ctx context.Context) error {
 		return nil
 	})
 
+	g.Go(func() error {
+		addr := fmt.Sprintf(":%d", app.config.GRPC.Port)
+		lis, err := net.Listen("tcp", addr)
+		if err != nil {
+			return fmt.Errorf("failed to listen on %s: %w", addr, err)
+		}
+		app.logger.Info("starting gRPC server", "port", app.config.GRPC.Port)
+		if err := app.grpcServer.Serve(lis); err != nil {
+			return fmt.Errorf("gRPC server error: %w", err)
+		}
+		return nil
+	})
+
 	<-globalCtx.Done()
 
 	return g.Wait()
@@ -118,6 +138,16 @@ func (app *Application) Shutdown(ctx context.Context) error {
 	if err := app.httpServer.Shutdown(ctx); err != nil {
 		app.logger.Error("HTTP server forced to shutdown", "error", err)
 		return err
+	}
+
+	if app.grpcServer != nil {
+		stopped := make(chan struct{})
+		go func() { app.grpcServer.GracefulStop(); close(stopped) }()
+		select {
+		case <-stopped:
+		case <-ctx.Done():
+			app.grpcServer.Stop()
+		}
 	}
 
 	if app.retentionService != nil {

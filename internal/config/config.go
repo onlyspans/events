@@ -14,6 +14,11 @@ type Config struct {
 	Features FeatureFlags
 	Database DatabaseConfig
 	EventLog EventLogConfig
+	GRPC     GRPCConfig
+}
+
+type GRPCConfig struct {
+	Port int `envconfig:"GRPC_PORT" default:"9090"`
 }
 
 type FeatureFlags struct {
@@ -69,6 +74,10 @@ func Load() (*Config, error) {
 
 	if err := envconfig.Process("", &cfg.EventLog); err != nil {
 		return nil, fmt.Errorf("failed to process event log config: %w", err)
+	}
+
+	if err := envconfig.Process("", &cfg.GRPC); err != nil {
+		return nil, fmt.Errorf("failed to process GRPC config: %w", err)
 	}
 
 	return &cfg, nil
