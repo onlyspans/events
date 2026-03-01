@@ -20,9 +20,6 @@ func TestLoad_DefaultFeatureFlags(t *testing.T) {
 	}
 
 	// Test default values
-	if cfg.Features.KafkaEnabled != false {
-		t.Errorf("expected KafkaEnabled=false by default, got %v", cfg.Features.KafkaEnabled)
-	}
 	if cfg.Features.AutoMigrate != true {
 		t.Errorf("expected AutoMigrate=true by default, got %v", cfg.Features.AutoMigrate)
 	}
@@ -31,64 +28,37 @@ func TestLoad_DefaultFeatureFlags(t *testing.T) {
 func TestLoad_FeatureFlagsFromEnv(t *testing.T) {
 	tests := []struct {
 		name                string
-		kafkaEnabledEnv     string
 		autoMigrateEnv      string
-		expectedKafka       bool
 		expectedAutoMigrate bool
 	}{
 		{
-			name:                "both true",
-			kafkaEnabledEnv:     "true",
+			name:                "true",
 			autoMigrateEnv:      "true",
-			expectedKafka:       true,
 			expectedAutoMigrate: true,
 		},
 		{
-			name:                "both false",
-			kafkaEnabledEnv:     "false",
+			name:                "false",
 			autoMigrateEnv:      "false",
-			expectedKafka:       false,
 			expectedAutoMigrate: false,
-		},
-		{
-			name:                "kafka true, migrate false",
-			kafkaEnabledEnv:     "true",
-			autoMigrateEnv:      "false",
-			expectedKafka:       true,
-			expectedAutoMigrate: false,
-		},
-		{
-			name:                "kafka false, migrate true",
-			kafkaEnabledEnv:     "false",
-			autoMigrateEnv:      "true",
-			expectedKafka:       false,
-			expectedAutoMigrate: true,
 		},
 		{
 			name:                "numeric true (1)",
-			kafkaEnabledEnv:     "1",
 			autoMigrateEnv:      "1",
-			expectedKafka:       true,
 			expectedAutoMigrate: true,
 		},
 		{
 			name:                "numeric false (0)",
-			kafkaEnabledEnv:     "0",
 			autoMigrateEnv:      "0",
-			expectedKafka:       false,
 			expectedAutoMigrate: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment variables
 			os.Setenv("POSTGRES_DSN", "postgres://test")
-			os.Setenv("KAFKA_ENABLED", tt.kafkaEnabledEnv)
 			os.Setenv("AUTO_MIGRATE", tt.autoMigrateEnv)
 			defer func() {
 				os.Unsetenv("POSTGRES_DSN")
-				os.Unsetenv("KAFKA_ENABLED")
 				os.Unsetenv("AUTO_MIGRATE")
 			}()
 
@@ -97,9 +67,6 @@ func TestLoad_FeatureFlagsFromEnv(t *testing.T) {
 				t.Fatalf("Load() failed: %v", err)
 			}
 
-			if cfg.Features.KafkaEnabled != tt.expectedKafka {
-				t.Errorf("expected KafkaEnabled=%v, got %v", tt.expectedKafka, cfg.Features.KafkaEnabled)
-			}
 			if cfg.Features.AutoMigrate != tt.expectedAutoMigrate {
 				t.Errorf("expected AutoMigrate=%v, got %v", tt.expectedAutoMigrate, cfg.Features.AutoMigrate)
 			}
@@ -109,39 +76,27 @@ func TestLoad_FeatureFlagsFromEnv(t *testing.T) {
 
 func TestLoad_InvalidBooleanValues(t *testing.T) {
 	tests := []struct {
-		name            string
-		kafkaEnabledEnv string
-		autoMigrateEnv  string
-		shouldError     bool
+		name           string
+		autoMigrateEnv string
+		shouldError    bool
 	}{
 		{
-			name:            "invalid kafka value",
-			kafkaEnabledEnv: "invalid",
-			autoMigrateEnv:  "true",
-			shouldError:     true,
+			name:           "invalid migrate value",
+			autoMigrateEnv: "invalid",
+			shouldError:    true,
 		},
 		{
-			name:            "invalid migrate value",
-			kafkaEnabledEnv: "true",
-			autoMigrateEnv:  "invalid",
-			shouldError:     true,
-		},
-		{
-			name:            "both invalid",
-			kafkaEnabledEnv: "invalid",
-			autoMigrateEnv:  "invalid",
-			shouldError:     true,
+			name:           "valid migrate value",
+			autoMigrateEnv: "true",
+			shouldError:    false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set environment variables
-			os.Setenv("KAFKA_ENABLED", tt.kafkaEnabledEnv)
 			os.Setenv("AUTO_MIGRATE", tt.autoMigrateEnv)
-			os.Setenv("POSTGRES_DSN", "postgres://test") // Required field
+			os.Setenv("POSTGRES_DSN", "postgres://test")
 			defer func() {
-				os.Unsetenv("KAFKA_ENABLED")
 				os.Unsetenv("AUTO_MIGRATE")
 				os.Unsetenv("POSTGRES_DSN")
 			}()
@@ -187,9 +142,6 @@ func TestLoad_MinimalConfiguration(t *testing.T) {
 	if cfg.Database.DSN != testDSN {
 		t.Errorf("expected POSTGRES_DSN=%s, got %s", testDSN, cfg.Database.DSN)
 	}
-	if cfg.Kafka.Brokers != "localhost:9092" {
-		t.Errorf("expected default KAFKA_BROKERS=localhost:9092, got %s", cfg.Kafka.Brokers)
-	}
 	if cfg.EventLog.RetentionPeriodDays != 90 {
 		t.Errorf("expected default RETENTION_PERIOD_DAYS=90, got %d", cfg.EventLog.RetentionPeriodDays)
 	}
@@ -198,9 +150,6 @@ func TestLoad_MinimalConfiguration(t *testing.T) {
 	}
 	if cfg.EventLog.RetentionCron != "0 2 * * *" {
 		t.Errorf("expected default RETENTION_CRON='0 2 * * *', got %s", cfg.EventLog.RetentionCron)
-	}
-	if cfg.Features.KafkaEnabled != false {
-		t.Errorf("expected default KAFKA_ENABLED=false, got %v", cfg.Features.KafkaEnabled)
 	}
 	if cfg.Features.AutoMigrate != true {
 		t.Errorf("expected default AUTO_MIGRATE=true, got %v", cfg.Features.AutoMigrate)
@@ -240,95 +189,6 @@ func TestLoad_WithPostgresDSN(t *testing.T) {
 	}
 }
 
-func TestLoad_WithKafkaBrokers(t *testing.T) {
-	// Clear all environment variables
-	envVars := []string{
-		"SERVER_PORT",
-		"POSTGRES_DSN",
-		"KAFKA_ENABLED", "KAFKA_BROKERS", "KAFKA_TOPIC", "KAFKA_GROUP_ID",
-		"RETENTION_PERIOD_DAYS", "MAX_EXPORT_SIZE", "RETENTION_CRON",
-		"AUTO_MIGRATE",
-	}
-	for _, v := range envVars {
-		os.Unsetenv(v)
-	}
-	defer func() {
-		for _, v := range envVars {
-			os.Unsetenv(v)
-		}
-	}()
-
-	// Set required field and Kafka brokers
-	os.Setenv("POSTGRES_DSN", "postgres://test")
-	testBrokers := "broker1:9092,broker2:9093,broker3:9094"
-	os.Setenv("KAFKA_BROKERS", testBrokers)
-
-	cfg, err := Load()
-	if err != nil {
-		t.Fatalf("Load() failed: %v", err)
-	}
-
-	// Verify Brokers field is set
-	if cfg.Kafka.Brokers != testBrokers {
-		t.Errorf("expected KAFKA_BROKERS=%q, got %q", testBrokers, cfg.Kafka.Brokers)
-	}
-
-	// Verify GetBrokers() returns parsed brokers
-	brokers := cfg.Kafka.GetBrokers()
-	expectedBrokers := []string{"broker1:9092", "broker2:9093", "broker3:9094"}
-
-	if len(brokers) != len(expectedBrokers) {
-		t.Errorf("expected %d brokers, got %d", len(expectedBrokers), len(brokers))
-		return
-	}
-
-	for i, broker := range brokers {
-		if broker != expectedBrokers[i] {
-			t.Errorf("broker[%d] = %q; want %q", i, broker, expectedBrokers[i])
-		}
-	}
-}
-
-func TestKafkaConfig_GetBrokers(t *testing.T) {
-	tests := []struct {
-		name     string
-		brokers  string
-		expected []string
-	}{
-		{
-			name:     "single broker",
-			brokers:  "localhost:9092",
-			expected: []string{"localhost:9092"},
-		},
-		{
-			name:     "multiple brokers",
-			brokers:  "localhost:9092,localhost:9093,localhost:9094",
-			expected: []string{"localhost:9092", "localhost:9093", "localhost:9094"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := KafkaConfig{
-				Brokers: tt.brokers,
-			}
-
-			result := cfg.GetBrokers()
-
-			if len(result) != len(tt.expected) {
-				t.Errorf("GetBrokers() returned %d brokers; want %d", len(result), len(tt.expected))
-				return
-			}
-
-			for i, broker := range result {
-				if broker != tt.expected[i] {
-					t.Errorf("GetBrokers()[%d] = %q; want %q", i, broker, tt.expected[i])
-				}
-			}
-		})
-	}
-}
-
 // validConfig returns a Config with valid values for testing.
 func validConfig() *Config {
 	return &Config{
@@ -340,19 +200,13 @@ func validConfig() *Config {
 			MaxConnIdleTime:   30 * time.Minute,
 			HealthCheckPeriod: 60 * time.Second,
 		},
-		Kafka: KafkaConfig{
-			Brokers: "localhost:9092",
-			Topic:   "events",
-			GroupID: "events-group",
-		},
 		EventLog: EventLogConfig{
 			RetentionPeriodDays: 90,
 			MaxExportSize:       10000,
 			RetentionCron:       "0 2 * * *",
 		},
 		Features: FeatureFlags{
-			KafkaEnabled: false,
-			AutoMigrate:  true,
+			AutoMigrate: true,
 		},
 	}
 }

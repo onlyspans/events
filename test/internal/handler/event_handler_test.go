@@ -22,7 +22,7 @@ func TestEventHandler_IngestEvent(t *testing.T) {
 		{
 			name: "valid event",
 			requestBody: testutil.NewEventIngestRequestBuilder().
-				WithProject("test-project").
+				WithEntityName("test-project").
 				Build(),
 			expectedStatus: http.StatusCreated,
 			checkResponse: func(t *testing.T, body []byte) {
@@ -38,8 +38,8 @@ func TestEventHandler_IngestEvent(t *testing.T) {
 		{
 			name: "missing required field",
 			requestBody: dto.EventIngestRequest{
-				User:     "test-user",
-				Category: "test-category",
+				UserID:     "test-user",
+				EntityName: "test-category",
 				// Missing Action
 			},
 			expectedStatus: http.StatusInternalServerError,
@@ -92,14 +92,16 @@ func TestEventHandler_IngestEventsBatch(t *testing.T) {
 			requestBody: dto.BatchIngestRequest{
 				Events: []dto.EventIngestRequest{
 					{
-						User:     "user1",
-						Category: "category1",
-						Action:   "action1",
+						EntityID:   "00000000-0000-0000-0000-000000000001",
+						EntityName: "category1",
+						UserID:     "user1",
+						Action:     "action1",
 					},
 					{
-						User:     "user2",
-						Category: "category2",
-						Action:   "action2",
+						EntityID:   "00000000-0000-0000-0000-000000000002",
+						EntityName: "category2",
+						UserID:     "user2",
+						Action:     "action2",
 					},
 				},
 			},
@@ -122,13 +124,15 @@ func TestEventHandler_IngestEventsBatch(t *testing.T) {
 			requestBody: dto.BatchIngestRequest{
 				Events: []dto.EventIngestRequest{
 					{
-						User:     "user1",
-						Category: "category1",
-						Action:   "action1",
+						EntityID:   "00000000-0000-0000-0000-000000000001",
+						EntityName: "category1",
+						UserID:     "user1",
+						Action:     "action1",
 					},
 					{
-						User:     "user2",
-						Category: "category2",
+						EntityID:   "00000000-0000-0000-0000-000000000002",
+						EntityName: "category2",
+						UserID:     "user2",
 						// Missing Action - validation error
 					},
 				},
@@ -156,9 +160,10 @@ func TestEventHandler_IngestEventsBatch(t *testing.T) {
 				events := make([]dto.EventIngestRequest, 101)
 				for i := range events {
 					events[i] = dto.EventIngestRequest{
-						User:     "user",
-						Category: "category",
-						Action:   "action",
+						EntityID:   "00000000-0000-0000-0000-000000000001",
+						EntityName: "category",
+						UserID:     "user",
+						Action:     "action",
 					}
 				}
 				return dto.BatchIngestRequest{Events: events}

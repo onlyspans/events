@@ -52,7 +52,6 @@ var (
 	})
 )
 
-// EventService handles event business logic.
 type EventService struct {
 	repo          ports.EventRepository
 	maxExportSize int
@@ -65,7 +64,6 @@ func NewEventService(repo ports.EventRepository, maxExportSize int) *EventServic
 	}
 }
 
-// IngestEvents processes and stores a batch of events.
 func (s *EventService) IngestEvents(ctx context.Context, eventDTOs []*dto.EventDTO) error {
 	if len(eventDTOs) == 0 {
 		return nil
@@ -88,11 +86,9 @@ func (s *EventService) IngestEvents(ctx context.Context, eventDTOs []*dto.EventD
 	return nil
 }
 
-// SearchEvents searches for events matching the query criteria.
 func (s *EventService) SearchEvents(ctx context.Context, req dto.SearchEventsRequest) (*dto.QueryResult, error) {
 	eventsSearchedCounter.Inc()
 
-	// Set defaults
 	if req.SortBy == "" {
 		req.SortBy = "timestamp"
 	}
@@ -107,21 +103,17 @@ func (s *EventService) SearchEvents(ctx context.Context, req dto.SearchEventsReq
 	}
 
 	query := ports.EventSearchQuery{
-		User:          req.User,
-		Category:      req.Category,
-		Action:        req.Action,
-		Document:      req.Document,
-		Project:       req.Project,
-		Environment:   req.Environment,
-		Tenant:        req.Tenant,
-		CorrelationID: req.CorrelationID,
-		TraceID:       req.TraceID,
-		StartDate:     req.StartDate,
-		EndDate:       req.EndDate,
-		SortBy:        req.SortBy,
-		SortOrder:     req.SortOrder,
-		Page:          req.Page,
-		Size:          req.Size,
+		EntityID:   req.EntityID,
+		EntityName: req.EntityName,
+		Action:     req.Action,
+		UserID:     req.UserID,
+		Tenant:     req.Tenant,
+		StartDate:  req.StartDate,
+		EndDate:    req.EndDate,
+		SortBy:     req.SortBy,
+		SortOrder:  req.SortOrder,
+		Page:       req.Page,
+		Size:       req.Size,
 	}
 
 	events, total, err := s.repo.Search(ctx, query)
@@ -148,9 +140,7 @@ func (s *EventService) SearchEvents(ctx context.Context, req dto.SearchEventsReq
 	}, nil
 }
 
-// ExportCSV exports events matching the query to CSV format.
 func (s *EventService) ExportCSV(ctx context.Context, req dto.ExportEventsRequest, writer io.Writer) error {
-	// Set defaults
 	if req.SortBy == "" {
 		req.SortBy = "timestamp"
 	}
@@ -159,21 +149,17 @@ func (s *EventService) ExportCSV(ctx context.Context, req dto.ExportEventsReques
 	}
 
 	query := ports.EventSearchQuery{
-		User:          req.User,
-		Category:      req.Category,
-		Action:        req.Action,
-		Document:      req.Document,
-		Project:       req.Project,
-		Environment:   req.Environment,
-		Tenant:        req.Tenant,
-		CorrelationID: req.CorrelationID,
-		TraceID:       req.TraceID,
-		StartDate:     req.StartDate,
-		EndDate:       req.EndDate,
-		SortBy:        req.SortBy,
-		SortOrder:     req.SortOrder,
-		Page:          0,
-		Size:          s.maxExportSize,
+		EntityID:   req.EntityID,
+		EntityName: req.EntityName,
+		Action:     req.Action,
+		UserID:     req.UserID,
+		Tenant:     req.Tenant,
+		StartDate:  req.StartDate,
+		EndDate:    req.EndDate,
+		SortBy:     req.SortBy,
+		SortOrder:  req.SortOrder,
+		Page:       0,
+		Size:       s.maxExportSize,
 	}
 
 	events, _, err := s.repo.Search(ctx, query)
@@ -184,43 +170,25 @@ func (s *EventService) ExportCSV(ctx context.Context, req dto.ExportEventsReques
 	csvWriter := csv.NewWriter(writer)
 	defer csvWriter.Flush()
 
-	// Write header
 	header := []string{
-		"ID", "Timestamp", "User", "Category", "Action", "Document",
-		"Project", "Environment", "Tenant", "Correlation ID", "Trace ID",
-		"IP Address", "User Agent", "Additional Info",
+		"ID", "Timestamp", "Entity ID", "Entity Name", "Action",
+		"User ID", "IP Address", "User Agent", "Tenant",
 	}
 	if err := csvWriter.Write(header); err != nil {
 		return fmt.Errorf("failed to write CSV header: %w", err)
 	}
 
-	// Write rows
 	for _, event := range events {
-		ipAddress := ""
-		userAgent := ""
-		additionalInfo := ""
-
-		if event.Details != nil {
-			ipAddress = event.Details.IPAddress
-			userAgent = event.Details.UserAgent
-			additionalInfo = event.Details.AdditionalInfo
-		}
-
 		row := []string{
 			event.ID.String(),
 			event.Timestamp.Format(time.RFC3339),
-			event.User,
-			event.Category,
+			event.EntityID.String(),
+			event.EntityName,
 			event.Action,
-			event.DocumentName,
-			event.Project,
-			event.Environment,
+			event.UserID,
+			event.IPAddress,
+			event.UserAgent,
 			event.Tenant,
-			event.CorrelationID,
-			event.TraceID,
-			ipAddress,
-			userAgent,
-			additionalInfo,
 		}
 
 		if err := csvWriter.Write(row); err != nil {
@@ -232,27 +200,20 @@ func (s *EventService) ExportCSV(ctx context.Context, req dto.ExportEventsReques
 	return nil
 }
 
-// dtoToEntity converts a DTO to a domain entity.
 func (s *EventService) dtoToEntity(dto *dto.EventDTO) (*domain.Event, error) {
 	event := &domain.Event{
-		Timestamp:     dto.Timestamp,
-		User:          dto.User,
-		Category:      dto.Category,
-		Action:        dto.Action,
-		DocumentName:  dto.DocumentName,
-		Project:       dto.Project,
-		Environment:   dto.Environment,
-		Tenant:        dto.Tenant,
-		CorrelationID: dto.CorrelationID,
-		TraceID:       dto.TraceID,
-		CreatedAt:     time.Now(),
+		Timestamp:  dto.Timestamp,
+		EntityName: dto.EntityName,
+		Action:     dto.Action,
+		UserID:     dto.UserID,
+		IPAddress:  dto.IPAddress,
+		UserAgent:  dto.UserAgent,
+		Tenant:     dto.Tenant,
 	}
 
-	// Parse ID if provided, otherwise generate a new one
 	if dto.ID != "" {
 		id, err := uuid.Parse(dto.ID)
 		if err != nil {
-			// Log warning but continue with new UUID
 			event.ID = uuid.New()
 		} else {
 			event.ID = id
@@ -261,79 +222,59 @@ func (s *EventService) dtoToEntity(dto *dto.EventDTO) (*domain.Event, error) {
 		event.ID = uuid.New()
 	}
 
-	// Set the default timestamp if not provided
+	if dto.EntityID != "" {
+		entityID, err := uuid.Parse(dto.EntityID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid entity_id: %w", err)
+		}
+		event.EntityID = entityID
+	}
+
 	if event.Timestamp.IsZero() {
 		event.Timestamp = time.Now()
 	}
 
-	// Convert details
-	if dto.Details != nil {
-		details := &domain.EventDetails{
-			IPAddress:      dto.Details.IPAddress,
-			UserAgent:      dto.Details.UserAgent,
-			AdditionalInfo: dto.Details.AdditionalInfo,
-		}
-
-		if len(dto.Details.Changes) > 0 {
-			details.Changes = make([]domain.Change, len(dto.Details.Changes))
-			for i, changeDTO := range dto.Details.Changes {
-				details.Changes[i] = domain.Change{
-					Field:    changeDTO.Field,
-					OldValue: changeDTO.OldValue,
-					NewValue: changeDTO.NewValue,
-				}
+	if len(dto.Changes) > 0 {
+		event.Changes = make([]domain.Change, len(dto.Changes))
+		for i, changeDTO := range dto.Changes {
+			event.Changes[i] = domain.Change{
+				Field:    changeDTO.Field,
+				OldValue: changeDTO.OldValue,
+				NewValue: changeDTO.NewValue,
 			}
 		}
-
-		event.Details = details
 	}
 
 	return event, nil
 }
 
-// entityToDTO converts a domain entity to a DTO.
 func (s *EventService) entityToDTO(entity *domain.Event) dto.EventDTO {
 	eventDTO := dto.EventDTO{
-		ID:            entity.ID.String(),
-		Timestamp:     entity.Timestamp,
-		User:          entity.User,
-		Category:      entity.Category,
-		Action:        entity.Action,
-		DocumentName:  entity.DocumentName,
-		Project:       entity.Project,
-		Environment:   entity.Environment,
-		Tenant:        entity.Tenant,
-		CorrelationID: entity.CorrelationID,
-		TraceID:       entity.TraceID,
+		ID:         entity.ID.String(),
+		Timestamp:  entity.Timestamp,
+		EntityID:   entity.EntityID.String(),
+		EntityName: entity.EntityName,
+		Action:     entity.Action,
+		UserID:     entity.UserID,
+		IPAddress:  entity.IPAddress,
+		UserAgent:  entity.UserAgent,
+		Tenant:     entity.Tenant,
 	}
 
-	if entity.Details != nil {
-		eventDetailsDTO := &dto.EventDetailsDTO{
-			IPAddress:      entity.Details.IPAddress,
-			UserAgent:      entity.Details.UserAgent,
-			AdditionalInfo: entity.Details.AdditionalInfo,
-		}
-
-		if len(entity.Details.Changes) > 0 {
-			eventDetailsDTO.Changes = make([]dto.ChangeDTO, len(entity.Details.Changes))
-			for i, change := range entity.Details.Changes {
-				eventDetailsDTO.Changes[i] = dto.ChangeDTO{
-					Field:    change.Field,
-					OldValue: change.OldValue,
-					NewValue: change.NewValue,
-				}
+	if len(entity.Changes) > 0 {
+		eventDTO.Changes = make([]dto.ChangeDTO, len(entity.Changes))
+		for i, change := range entity.Changes {
+			eventDTO.Changes[i] = dto.ChangeDTO{
+				Field:    change.Field,
+				OldValue: change.OldValue,
+				NewValue: change.NewValue,
 			}
 		}
-
-		eventDTO.Details = eventDetailsDTO
 	}
 
 	return eventDTO
 }
 
-// processIngestRequest validates and converts an EventIngestRequest to a domain.Event.
-// It sets default values for ID, timestamp, and created_at if not provided.
-// Returns the prepared event or an error if validation fails.
 func (s *EventService) processIngestRequest(req dto.EventIngestRequest) (*domain.Event, error) {
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validation failed: %w", err)
@@ -349,14 +290,9 @@ func (s *EventService) processIngestRequest(req dto.EventIngestRequest) (*domain
 		event.Timestamp = time.Now()
 	}
 
-	event.CreatedAt = time.Now()
-
 	return event, nil
 }
 
-// CreateEvent creates a single event from an HTTP ingestion request.
-// It validates the request, sets default values for ID and timestamp,
-// and persists the event to the repository.
 func (s *EventService) CreateEvent(ctx context.Context, req dto.EventIngestRequest) (uuid.UUID, error) {
 	event, err := s.processIngestRequest(req)
 	if err != nil {
@@ -373,9 +309,6 @@ func (s *EventService) CreateEvent(ctx context.Context, req dto.EventIngestReque
 	return event.ID, nil
 }
 
-// CreateEventsBatch processes a batch of event ingestion requests with partial success support.
-// Each event is validated and processed individually. Failed events do not stop processing
-// of the remaining events. Returns a detailed response with success/failure counts and error details.
 func (s *EventService) CreateEventsBatch(ctx context.Context, requests []dto.EventIngestRequest) dto.BatchIngestResponse {
 	response := dto.BatchIngestResponse{
 		SuccessCount: 0,

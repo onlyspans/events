@@ -16,21 +16,17 @@ type EventRepository interface {
 }
 
 type EventSearchQuery struct {
-	User          string
-	Category      string
-	Action        string
-	Document      string
-	Project       string
-	Environment   string
-	Tenant        string
-	CorrelationID string
-	TraceID       string
-	StartDate     *time.Time
-	EndDate       *time.Time
-	SortBy        string
-	SortOrder     string
-	Page          int
-	Size          int
+	EntityID   string
+	EntityName string
+	Action     string
+	UserID     string
+	Tenant     string
+	StartDate  *time.Time
+	EndDate    *time.Time
+	SortBy     string
+	SortOrder  string
+	Page       int
+	Size       int
 }
 
 type SettingsRepository interface {

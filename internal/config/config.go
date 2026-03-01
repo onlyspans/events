@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -14,13 +13,11 @@ import (
 type Config struct {
 	Features FeatureFlags
 	Database DatabaseConfig
-	Kafka    KafkaConfig
 	EventLog EventLogConfig
 }
 
 type FeatureFlags struct {
-	KafkaEnabled bool `envconfig:"KAFKA_ENABLED" default:"false"`
-	AutoMigrate  bool `envconfig:"AUTO_MIGRATE" default:"true"`
+	AutoMigrate bool `envconfig:"AUTO_MIGRATE" default:"true"`
 }
 
 type DatabaseConfig struct {
@@ -30,14 +27,6 @@ type DatabaseConfig struct {
 	MaxConnLifetime   time.Duration `envconfig:"DB_MAX_CONN_LIFETIME_MINUTES" default:"5m"`
 	MaxConnIdleTime   time.Duration `envconfig:"DB_MAX_CONN_IDLE_TIME_MINUTES" default:"30m"`
 	HealthCheckPeriod time.Duration `envconfig:"DB_HEALTH_CHECK_PERIOD_SECONDS" default:"60s"`
-}
-
-type KafkaConfig struct {
-	Brokers  string `envconfig:"KAFKA_BROKERS" default:"localhost:9092"`
-	Topic    string `envconfig:"KAFKA_TOPIC" default:"events"`
-	GroupID  string `envconfig:"KAFKA_GROUP_ID" default:"events-group"`
-	Username string `envconfig:"KAFKA_USERNAME"`
-	Password string `envconfig:"KAFKA_PASSWORD"`
 }
 
 type EventLogConfig struct {
@@ -76,10 +65,6 @@ func Load() (*Config, error) {
 
 	if err := envconfig.Process("", &cfg.Database); err != nil {
 		return nil, fmt.Errorf("failed to process database config: %w", err)
-	}
-
-	if err := envconfig.Process("", &cfg.Kafka); err != nil {
-		return nil, fmt.Errorf("failed to process kafka config: %w", err)
 	}
 
 	if err := envconfig.Process("", &cfg.EventLog); err != nil {
@@ -121,8 +106,4 @@ func (c *Config) Validate() error {
 		return errors.Join(errs...)
 	}
 	return nil
-}
-
-func (c *KafkaConfig) GetBrokers() []string {
-	return strings.Split(c.Brokers, ",")
 }

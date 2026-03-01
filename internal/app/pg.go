@@ -9,6 +9,24 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/onlyspans/events/internal/config"
 	"github.com/onlyspans/events/internal/migrations"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+)
+
+var (
+	dbPoolConnsGauge = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "db_pool_connections",
+			Help: "Current number of database connections",
+		},
+		[]string{"state"},
+	)
+	dbPoolMaxConnsGauge = promauto.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "db_pool_max_connections",
+			Help: "Maximum number of database connections",
+		},
+	)
 )
 
 func setupPostgres(cfg *config.Config, logger *slog.Logger) (*pgxpool.Pool, error) {

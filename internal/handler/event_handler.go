@@ -74,7 +74,7 @@ func (h *EventHandler) ExportEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Info("export request received", "user", req.User, "category", req.Category)
+	h.logger.Info("export request received", "entity_id", req.EntityID, "action", req.Action)
 
 	timestamp := time.Now().UTC().Format("20060102_150405")
 	filename := fmt.Sprintf("events-export_%s_utc.csv", timestamp)
@@ -100,7 +100,7 @@ func (h *EventHandler) IngestEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.logger.Debug("ingest event request", "user", req.User, "category", req.Category, "action", req.Action)
+	h.logger.Debug("ingest event request", "entity_id", req.EntityID, "action", req.Action)
 
 	ctx, cancel := context.WithTimeout(r.Context(), ingestTimeout)
 	defer cancel()

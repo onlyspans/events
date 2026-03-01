@@ -1,7 +1,7 @@
 image:
   repository: onlyspans-private.registry.twcstorage.ru/events
   pullPolicy: IfNotPresent
-  tag: ""  # Will be set by Octopus
+  tag: ""
 
 imagePullSecrets: []
 nameOverride: ""

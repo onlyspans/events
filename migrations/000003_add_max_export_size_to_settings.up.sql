@@ -1,1 +1,0 @@
-ALTER TABLE settings ADD COLUMN max_export_size INT NOT NULL DEFAULT 10000;
