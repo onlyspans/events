@@ -66,26 +66,29 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 	healthChecker := handler.NewDBHealthChecker(pool)
 	healthHandler := handler.NewHealthHandler(healthChecker, logger)
 
-	mux := http.NewServeMux()
+	apiMux := http.NewServeMux()
 
-	mux.HandleFunc("POST /events", eventHandler.SearchEvents)
-	mux.HandleFunc("POST /events/export", eventHandler.ExportEvents)
-	mux.HandleFunc("POST /events/ingest", eventHandler.IngestEvent)
-	mux.HandleFunc("POST /events/ingest/batch", eventHandler.IngestEventsBatch)
+	apiMux.HandleFunc("POST /events", eventHandler.SearchEvents)
+	apiMux.HandleFunc("POST /events/export", eventHandler.ExportEvents)
+	apiMux.HandleFunc("POST /events/ingest", eventHandler.IngestEvent)
+	apiMux.HandleFunc("POST /events/ingest/batch", eventHandler.IngestEventsBatch)
 
-	mux.HandleFunc("GET /settings", settingsHandler.GetSettings)
-	mux.HandleFunc("PUT /settings", settingsHandler.UpdateSettings)
+	apiMux.HandleFunc("GET /settings", settingsHandler.GetSettings)
+	apiMux.HandleFunc("PUT /settings", settingsHandler.UpdateSettings)
 
-	mux.HandleFunc("GET /readyz", healthHandler.Readiness)
-	mux.HandleFunc("GET /healthz", healthHandler.Liveness)
-	mux.HandleFunc("GET /version", healthHandler.Version)
-
-	mux.Handle("GET /metrics", promhttp.Handler())
+	apiMux.HandleFunc("GET /version", healthHandler.Version)
 
 	pipeline := middleware.Pipeline(
 		middleware.Recovery(logger),
 		middleware.Logging(logger),
 	)
+
+	mux := http.NewServeMux()
+	mux.Handle("/", pipeline(apiMux))
+
+	mux.HandleFunc("GET /readyz", healthHandler.Readiness)
+	mux.HandleFunc("GET /healthz", healthHandler.Liveness)
+	mux.Handle("GET /metrics", promhttp.Handler())
 
 	app.httpServer = &http.Server{
 		Addr:         ":8080",
