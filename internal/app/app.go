@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -81,6 +82,13 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 	pipeline := middleware.Pipeline(
 		middleware.Recovery(logger),
 		middleware.Logging(logger),
+		middleware.CORS(middleware.CORSOptions{
+			AllowedOrigins:   splitCSV(cfg.HTTP.CORS.AllowedOrigins),
+			AllowedMethods:   splitCSV(cfg.HTTP.CORS.AllowedMethods),
+			AllowedHeaders:   splitCSV(cfg.HTTP.CORS.AllowedHeaders),
+			AllowCredentials: cfg.HTTP.CORS.AllowCredentials,
+			MaxAgeSeconds:    cfg.HTTP.CORS.MaxAgeSeconds,
+		}),
 	)
 
 	mux := http.NewServeMux()
@@ -99,6 +107,22 @@ func New(cfg *config.Config, logger *slog.Logger) (*Application, error) {
 	}
 
 	return app, nil
+}
+
+func splitCSV(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 func (app *Application) Handler() http.Handler {

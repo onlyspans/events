@@ -15,10 +15,25 @@ type Config struct {
 	Database DatabaseConfig
 	EventLog EventLogConfig
 	GRPC     GRPCConfig
+	HTTP     HTTPConfig
 }
 
 type GRPCConfig struct {
 	Port int `envconfig:"GRPC_PORT" default:"9090"`
+}
+
+type HTTPConfig struct {
+	CORS CORSConfig
+}
+
+type CORSConfig struct {
+	// AllowedOrigins is a comma-separated list of origins (e.g. "http://localhost:3000,https://app.example.com")
+	// or "*" to allow any origin. If credentials are enabled, "*" cannot be used.
+	AllowedOrigins string `envconfig:"CORS_ALLOWED_ORIGINS" default:"*"`
+	AllowedHeaders string `envconfig:"CORS_ALLOWED_HEADERS" default:"Authorization,Content-Type,Accept"`
+	AllowedMethods string `envconfig:"CORS_ALLOWED_METHODS" default:"GET,POST,PUT,OPTIONS"`
+	AllowCredentials bool `envconfig:"CORS_ALLOW_CREDENTIALS" default:"false"`
+	MaxAgeSeconds    int  `envconfig:"CORS_MAX_AGE_SECONDS" default:"600"`
 }
 
 type FeatureFlags struct {
@@ -78,6 +93,10 @@ func Load() (*Config, error) {
 
 	if err := envconfig.Process("", &cfg.GRPC); err != nil {
 		return nil, fmt.Errorf("failed to process GRPC config: %w", err)
+	}
+
+	if err := envconfig.Process("", &cfg.HTTP); err != nil {
+		return nil, fmt.Errorf("failed to process HTTP config: %w", err)
 	}
 
 	return &cfg, nil
